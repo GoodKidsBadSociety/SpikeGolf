@@ -1,0 +1,17 @@
+{
+  "name": "Spikegolf Tracker",
+  "short_name": "Spikegolf",
+  "description": "Spikegolf auf der Alm: Kurse anlegen, Hindernisse definieren, Schläge tracken und Rangliste führen.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f8f4",
+  "theme_color": "#2d6a4f",
+  "lang": "de",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

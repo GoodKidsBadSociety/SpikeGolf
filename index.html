@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#2d6a4f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Spikegolf">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Spikegolf · GKBS</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- App shell -->
+  <div id="app">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span class="brand-mark">⛳</span>
+          <div>
+            <div class="brand-title">Spikegolf</div>
+            <div class="brand-sub" id="brandSub">Obiralm</div>
+          </div>
+        </div>
+        <button class="icon-btn" id="menuBtn" aria-label="Menü">⋯</button>
+      </div>
+    </header>
+
+    <main id="view"><!-- views render here --></main>
+
+    <nav class="tabbar">
+      <button class="tab" data-tab="leaderboard">
+        <span class="tab-ico">🏆</span><span class="tab-lbl">Rangliste</span>
+      </button>
+      <button class="tab" data-tab="play">
+        <span class="tab-ico">🎯</span><span class="tab-lbl">Spielen</span>
+      </button>
+      <button class="tab" data-tab="courses">
+        <span class="tab-ico">⛳</span><span class="tab-lbl">Kurse</span>
+      </button>
+      <button class="tab" data-tab="players">
+        <span class="tab-ico">👤</span><span class="tab-lbl">Spieler</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Bottom-sheet modal -->
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-card" role="dialog" aria-modal="true">
+      <div class="sheet-handle"></div>
+      <div id="sheetBody"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
