@@ -382,10 +382,43 @@ function loadTerrain() {
   const ring = $('#bootRing');
   const bootSub = $('#bootSub');
 
+  // Progress budget: 0–85 % is the byte transfer, 85–100 % is Three.js
+  // parsing (geometry + textures). The parse can easily take 2–3 s on
+  // a phone, so we advertise it separately with a shimmer so the bar
+  // never looks stuck.
+  const TRANSFER_END = 0.85;
+  const CIRC = 188.5;
+  const setPct = (pct) => {
+    const p = Math.max(0, Math.min(1, pct));
+    bar.style.width = `${(p * 100).toFixed(2)}%`;
+    ring.setAttribute('stroke-dashoffset', String((CIRC * (1 - p)).toFixed(1)));
+  };
+  let parseTick = null;
+  const startParseShimmer = () => {
+    if (parseTick) return;
+    boot.classList.add('parsing');
+    // Slow drift from 85 → 95 % while we wait for the callback.
+    const start = performance.now();
+    parseTick = setInterval(() => {
+      const elapsed = (performance.now() - start) / 1000;
+      const t = Math.min(1, elapsed / 4);       // 4 s to reach 95 %
+      const p = TRANSFER_END + (0.95 - TRANSFER_END) * t;
+      setPct(p);
+      bootSub.textContent = 'Verarbeite 3D-Modell …';
+    }, 100);
+  };
+  const stopParseShimmer = () => {
+    if (parseTick) { clearInterval(parseTick); parseTick = null; }
+    boot.classList.remove('parsing');
+  };
+
   return new Promise((resolve, reject) => {
     const loader = new GLTFLoader();
     loader.load('map.glb',
       (gltf) => {
+        stopParseShimmer();
+        setPct(1);
+        bootSub.textContent = 'Fertig';
         const model = gltf.scene;
         // Compute bounding box, center, scale to a manageable size.
         const box = new THREE.Box3().setFromObject(model);
@@ -438,16 +471,25 @@ function loadTerrain() {
       },
       (evt) => {
         if (!evt.total) {
-          bootSub.textContent = `Lade Alm-Modell … ${(evt.loaded / 1048576).toFixed(1)} MB`;
+          // No content-length header (e.g. served from SW cache with
+          // opaque response). Show MB transferred and pretend transfer
+          // is done once we start receiving anything meaningful.
+          const mb = evt.loaded / 1048576;
+          bootSub.textContent = `Lade Alm-Modell · ${mb.toFixed(1)} MB`;
+          setPct(Math.min(TRANSFER_END, mb / 90));
           return;
         }
-        const pct = evt.loaded / evt.total;
-        bar.style.width = `${(pct * 100).toFixed(0)}%`;
-        const circumference = 188.5;
-        ring.setAttribute('stroke-dashoffset', String(circumference * (1 - pct)));
-        bootSub.textContent = `Alm-Modell wird geladen · ${(pct * 100).toFixed(0)} %`;
+        const transferPct = evt.loaded / evt.total;
+        setPct(transferPct * TRANSFER_END);
+        const mbLoaded = evt.loaded / 1048576;
+        const mbTotal = evt.total / 1048576;
+        if (transferPct < 1) {
+          bootSub.textContent = `Lade Alm-Modell · ${mbLoaded.toFixed(0)}/${mbTotal.toFixed(0)} MB`;
+        } else {
+          startParseShimmer();
+        }
       },
-      (err) => { console.error('gltf load failed', err); bootSub.textContent = 'Karte konnte nicht geladen werden.'; reject(err); }
+      (err) => { stopParseShimmer(); console.error('gltf load failed', err); bootSub.textContent = 'Karte konnte nicht geladen werden.'; reject(err); }
     );
   });
 }
@@ -1193,7 +1235,7 @@ function renderPlay() {
     <span class="num">Bahn ${String(idx + 1).padStart(2, '0')}</span>
     <span class="name">${esc(active.name)}</span>
     <span class="par-pill">Par ${Number(active.par) || 0}</span>
-    <button class="play-end" onclick="finishRound()" title="Runde abschließen · Sieger anzeigen">✕</button>
+    <button class="play-end" onclick="finishRound()" title="Runde beenden und Sieger anzeigen">Beenden</button>
   </div>`;
 
   // Kurs-Auswahl nur bei > 1 Bahn in der Runde
@@ -1239,9 +1281,12 @@ function renderPlay() {
         </div>
       </div>`;
     });
-    html += idx < courses.length - 1
-      ? `<button class="btn btn-primary btn-block btn-sm" style="margin-top:4px" onclick="nextCourse()">Nächster Kurs →</button>`
-      : `<button class="btn btn-primary btn-block btn-sm" style="margin-top:4px" onclick="go('leaderboard')">→ Rangliste</button>`;
+    const holeComplete = players.every(p => scoreFor(active.id, p.id) > 0);
+    const isLast = idx >= courses.length - 1;
+    const cls = `btn btn-primary btn-block btn-sm ${holeComplete ? 'pulse' : ''}`;
+    html += isLast
+      ? `<button class="${cls}" style="margin-top:4px" onclick="finishRound()">→ Runde beenden & Sieger</button>`
+      : `<button class="${cls}" style="margin-top:4px" onclick="nextCourse()">Nächste Bahn →</button>`;
   }
 
   view.innerHTML = html;
