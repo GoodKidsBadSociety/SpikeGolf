@@ -1147,11 +1147,12 @@ function renderPlay() {
   const idx = courses.indexOf(active);
   const players = roundPlayers(round);
 
-  // Header row (single line, tight)
+  // Header row (single line, tight) + end-round quick action
   let html = `<div class="play-course-head">
     <span class="num">Bahn ${String(idx + 1).padStart(2, '0')}</span>
     <span class="name">${esc(active.name)}</span>
     <span class="par-pill">Par ${Number(active.par) || 0}</span>
+    <button class="play-end" onclick="endRound()" title="Runde beenden">✕</button>
   </div>`;
 
   // Kurs-Auswahl nur bei > 1 Bahn in der Runde
@@ -1204,12 +1205,14 @@ function renderPlay() {
 
   view.innerHTML = html;
 
-  $('#courseTabs').addEventListener('click', (e) => {
+  const ctabs = $('#courseTabs');
+  if (ctabs) ctabs.addEventListener('click', (e) => {
     const b = e.target.closest('[data-course]');
     if (!b) return;
     state.activeCourseId = b.dataset.course; save(); render();
   });
-  $('#playSubs').addEventListener('click', (e) => {
+  const psubs = $('#playSubs');
+  if (psubs) psubs.addEventListener('click', (e) => {
     const b = e.target.closest('[data-sub]');
     if (!b) return;
     setPlaySub(b.dataset.sub);
