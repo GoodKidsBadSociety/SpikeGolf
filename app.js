@@ -1850,7 +1850,17 @@ loadTerrain().catch(() => {}).finally(() => { render(); });
   try {
     const { enabled, initialData } = await initSync({ applyRemote: applyRemoteState });
     if (!enabled) return;
-    if (initialData) applyRemoteState(initialData);
+    const remoteHasContent = initialData && (
+      (Array.isArray(initialData.players) && initialData.players.length) ||
+      (Array.isArray(initialData.courses) && initialData.courses.length) ||
+      (Array.isArray(initialData.rounds) && initialData.rounds.length)
+    );
+    if (remoteHasContent) {
+      applyRemoteState(initialData);
+    } else {
+      // Remote is fresh — seed it with our local snapshot right away.
+      await flushState(state);
+    }
     // Flush pending writes on suspend so we don't lose the last edit.
     const flush = () => flushState(state);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
