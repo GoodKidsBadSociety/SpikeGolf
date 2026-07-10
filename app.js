@@ -734,7 +734,14 @@ function clearDraft() {
   if (draftGroup) { scene3.scene.remove(draftGroup); clearGroup(draftGroup); draftGroup = null; }
 }
 
-/* ---------------- Camera focus animation ---------------- */
+/* ---------------- Camera focus animation ----------------
+   Vertical bias: the HUD panel eats the top ~35 % of the viewport,
+   so we raise the look-at point above the geometric center of the
+   subject. That pushes the actual terrain into the lower part of
+   the frame where it's not covered.
+*/
+const CAM_UP_BIAS = 0.22;
+
 function focusCourse(course, duration = 900) {
   const pts = waypointsOf(course) || (course.startPos ? [course.startPos] : null);
   if (!pts || !pts.length) return;
@@ -743,14 +750,16 @@ function focusCourse(course, duration = 900) {
   const size = new THREE.Vector3(); box.getSize(size);
   const center = new THREE.Vector3(); box.getCenter(center);
   const dist = Math.max(size.length() * 1.6, scene3.radius * 0.6);
+  const yBias = dist * CAM_UP_BIAS;
+  const target = center.clone(); target.y += yBias;
   const camTo = new THREE.Vector3(
     center.x + dist * 0.5,
-    Math.max(center.y + dist * 0.55, size.y + dist * 0.4),
+    Math.max(center.y + dist * 0.55, size.y + dist * 0.4) + yBias,
     center.z + dist * 0.9
   );
-  scene3.orbitCenter.copy(center);
+  scene3.orbitCenter.copy(target);
   scene3.orbitRadius = dist;
-  animateCamera(camTo, center.clone(), duration);
+  animateCamera(camTo, target, duration);
 }
 
 // Frame the camera on all courses that already have a route.
@@ -758,14 +767,17 @@ function focusCourse(course, duration = 900) {
 function focusOnCourses(courses, duration = 800) {
   const withRoute = (courses || []).filter(c => hasRoute(c));
   if (withRoute.length === 0) {
-    scene3.orbitCenter.copy(scene3.center);
-    scene3.orbitRadius = scene3.radius * 1.6;
+    const dist = scene3.radius * 1.6;
+    const yBias = dist * CAM_UP_BIAS;
+    const target = scene3.center.clone(); target.y += yBias;
+    scene3.orbitCenter.copy(target);
+    scene3.orbitRadius = dist;
     animateCamera(
       new THREE.Vector3(
         scene3.center.x + scene3.radius * 1.1,
-        scene3.center.y + scene3.radius * 1.2,
+        scene3.center.y + scene3.radius * 1.2 + yBias,
         scene3.center.z + scene3.radius * 1.3),
-      scene3.center.clone(), duration);
+      target, duration);
     return;
   }
   const box = new THREE.Box3();
@@ -776,14 +788,16 @@ function focusOnCourses(courses, duration = 800) {
   const size = new THREE.Vector3(); box.getSize(size);
   const center = new THREE.Vector3(); box.getCenter(center);
   const dist = Math.max(size.length() * 1.35, scene3.radius * 0.55);
-  scene3.orbitCenter.copy(center);
+  const yBias = dist * CAM_UP_BIAS;
+  const target = center.clone(); target.y += yBias;
+  scene3.orbitCenter.copy(target);
   scene3.orbitRadius = dist;
   const camTo = new THREE.Vector3(
     center.x + dist * 0.5,
-    Math.max(center.y + dist * 0.7, size.y + dist * 0.4),
+    Math.max(center.y + dist * 0.7, size.y + dist * 0.4) + yBias,
     center.z + dist * 0.9
   );
-  animateCamera(camTo, center.clone(), duration);
+  animateCamera(camTo, target, duration);
 }
 
 function animateCamera(camTo, targetTo, duration) {
