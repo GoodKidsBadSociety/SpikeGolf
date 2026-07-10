@@ -19,7 +19,18 @@ const OBSTACLE_TYPES = [
   { key: 'wasser',emoji: '💧', label: 'Wasser' },
   { key: 'sonst', emoji: '🎯', label: 'Sonstiges' },
 ];
-const AVATAR_COLORS = ['#ffb547','#64c294','#e07856','#ff6b6b','#7ab8ff','#c896ff','#4fd1c5','#ffd18a'];
+const AVATAR_COLORS = [
+  '#ffb547', // amber
+  '#64c294', // moss
+  '#e07856', // clay
+  '#ff6b6b', // coral red
+  '#7ab8ff', // sky blue
+  '#c896ff', // lavender
+  '#4fd1c5', // teal
+  '#f8e16c', // yellow
+  '#d977a6', // pink
+  '#a8e061', // lime
+];
 const ROUTE_COLORS = ['#ffb547','#64c294','#7ab8ff','#c896ff','#e07856','#ffd18a','#4fd1c5','#ff6b6b'];
 
 /* ============================================================
