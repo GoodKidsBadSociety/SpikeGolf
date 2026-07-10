@@ -7,5 +7,5 @@
    Security in app_state controls what it can actually do.
 */
 
-export const SUPABASE_URL = '';
-export const SUPABASE_ANON_KEY = '';
+export const SUPABASE_URL = 'https://mlutofarvtifetxpqcqd.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_Kt8wY9fH7t-HNlIHGzsUiw_Yc4B8QWY';
