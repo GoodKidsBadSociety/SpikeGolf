@@ -980,7 +980,7 @@ function render() {
 /* ---------- Leaderboard ---------- */
 function renderLeaderboard() {
   const round = activeRound();
-  if (round && isRoundComplete(round)) { renderWinner(round); return; }
+  if (round && (isRoundComplete(round) || round.endedAt)) { renderWinner(round); return; }
   const rows = leaderboard();
   const anyPlayed = rows.some(r => r.played > 0);
   const parTotal = totalPar();
@@ -1057,9 +1057,13 @@ function renderLeaderboard() {
         <div class="mono small muted" style="letter-spacing:0.16em;text-transform:uppercase">Gesamt-Par</div>
         <div class="mono" style="font-size:22px;font-weight:500">${parTotal} <span class="muted small">Schläge</span></div>
       </div>
-      <button class="btn btn-danger btn-sm" onclick="endRound()">Beenden</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="finishRound()">Abschließen</button>
+        <button class="btn btn-danger btn-sm" onclick="endRound()">Archivieren</button>
+      </div>
     </div>`;
   }
+  html += `<button class="btn btn-primary btn-block" style="margin-top:14px" onclick="newRound()">＋ Neues Spiel starten</button>`;
   view.innerHTML = html;
 }
 function toParLabel(t) {
@@ -1133,9 +1137,15 @@ function renderWinner(round) {
   });
   html += `</div>`;
 
-  html += `<div class="row" style="gap:8px;margin-top:14px">
-    <button class="btn btn-danger btn-block" onclick="endRound()">Runde beenden</button>
-    <button class="btn btn-block" onclick="go('play')">Weiter tracken</button>
+  const wasManual = !!round.endedAt && !isRoundComplete(round);
+  const reopenLabel = wasManual ? 'Wieder öffnen' : 'Weiter tracken';
+  const reopenCall = wasManual ? 'reopenRound()' : "go('play')";
+  html += `<div class="row" style="gap:8px;margin-top:14px;flex-wrap:wrap">
+    <button class="btn btn-primary btn-block" onclick="newRound()">＋ Neues Spiel</button>
+  </div>
+  <div class="row" style="gap:8px;margin-top:8px">
+    <button class="btn btn-danger btn-block" onclick="endRound()">Archivieren</button>
+    <button class="btn btn-block" onclick="${reopenCall}">${reopenLabel}</button>
   </div>`;
 
   view.innerHTML = html;
@@ -1183,7 +1193,7 @@ function renderPlay() {
     <span class="num">Bahn ${String(idx + 1).padStart(2, '0')}</span>
     <span class="name">${esc(active.name)}</span>
     <span class="par-pill">Par ${Number(active.par) || 0}</span>
-    <button class="play-end" onclick="endRound()" title="Runde beenden">✕</button>
+    <button class="play-end" onclick="finishRound()" title="Runde abschließen · Sieger anzeigen">✕</button>
   </div>`;
 
   // Kurs-Auswahl nur bei > 1 Bahn in der Runde
@@ -1402,13 +1412,47 @@ function pickAllCourses(all) {
   renderRoundStart();
 }
 
+// Mark a round as finished but keep it active — leaderboard flips to
+// the winner overview so the group can enjoy the result before it's
+// archived.
+function finishRound() {
+  const r = activeRound(); if (!r) return;
+  if (!confirm(`Runde "${r.name}" jetzt abschließen und Sieger zeigen?`)) return;
+  r.endedAt = Date.now();
+  save(); go('leaderboard');
+  toast('Runde abgeschlossen');
+}
+
+// Fully archive: no more active round, land on the round-start screen.
 function endRound() {
   const r = activeRound(); if (!r) return;
-  if (!confirm(`Runde "${r.name}" beenden? Die Ergebnisse bleiben in der Historie.`)) return;
-  r.endedAt = Date.now();
+  if (!r.endedAt) {
+    if (!confirm(`Runde "${r.name}" archivieren? Die Ergebnisse bleiben in der Historie.`)) return;
+    r.endedAt = Date.now();
+  }
   state.activeRoundId = null;
   save(); render();
-  toast('Runde beendet');
+  toast('Runde archiviert');
+}
+
+// Re-open a finished round for further edits/plays.
+function reopenRound() {
+  const r = activeRound(); if (!r) return;
+  r.endedAt = null;
+  save(); go('play');
+  toast('Runde weiter offen');
+}
+
+// Start a fresh round from anywhere. If one is running, ask first.
+function newRound() {
+  const r = activeRound();
+  if (r && !r.endedAt) {
+    if (!confirm(`Aktuelle Runde "${r.name}" abschließen und neue starten?`)) return;
+    r.endedAt = Date.now();
+  }
+  state.activeRoundId = null;
+  roundDraft = null;
+  save(); go('play');
 }
 
 function resumeRound(id) {
@@ -1791,12 +1835,14 @@ function openMenu() {
   const box = el(`<div>
     <h2 class="sheet-title">Menü</h2>
     <p class="sheet-sub">Daten · Turnier · Ansicht</p>
-    <button class="btn btn-block" id="mCam">◎ Kamera zurücksetzen</button>
+    <button class="btn btn-primary btn-block" id="mNew">＋ Neues Spiel starten</button>
+    <button class="btn btn-block" id="mCam" style="margin-top:10px">◎ Kamera zurücksetzen</button>
     <button class="btn btn-block" id="mExport" style="margin-top:10px">↓ Backup exportieren</button>
     <button class="btn btn-block" id="mImport" style="margin-top:10px">↑ Backup importieren</button>
     <button class="btn btn-danger btn-block" id="mWipe" style="margin-top:10px">✕ Alles löschen</button>
     <p class="mono small muted" style="text-align:center;margin-top:22px;letter-spacing:0.16em;text-transform:uppercase">Spikegolf · GKBS · Obiralm · ${syncEnabled() ? 'cloud sync' : 'offline'}</p>
   </div>`);
+  $('#mNew', box).addEventListener('click', () => { closeSheet(); newRound(); });
   $('#mCam', box).addEventListener('click', () => { closeSheet(); resetCamera(); });
   $('#mExport', box).addEventListener('click', exportData);
   $('#mImport', box).addEventListener('click', importData);
@@ -1841,6 +1887,7 @@ function resetCamera() {
 Object.assign(window, {
   go, nextCourse, resetScores, editPlayer, editCourse, playCourse, setPlaySub,
   pickAllPlayers, pickAllCourses, endRound, resumeRound, deleteRound,
+  finishRound, reopenRound, newRound,
   selectCourse, deselectCourse,
 });
 
