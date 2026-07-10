@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0b1912">
+  <meta name="theme-color" content="#0f1c17">
+  <meta name="color-scheme" content="dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Spikegolf">
@@ -97,6 +98,12 @@
 
   <!-- Toast -->
   <div id="toast" class="toast" hidden></div>
+
+  <!-- Pull-to-refresh indicator (only visible during gesture) -->
+  <div id="pull" class="pull-refresh" hidden>
+    <div class="pull-ring"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 4v10m0 0l-4-4m4 4l4-4"/></svg></div>
+    <span id="pullLabel">Ziehen zum Neu-Laden</span>
+  </div>
 
   <script type="module" src="app.js"></script>
 </body>
