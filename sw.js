@@ -1,10 +1,12 @@
 /* Spikegolf service worker — offline-first cache */
-const CACHE = 'spikegolf-v1';
+const CACHE = 'spikegolf-v3';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './map.jpg',
+  './hero.jpg',
   './manifest.webmanifest',
   './icons/icon-180.png',
   './icons/icon-192.png',

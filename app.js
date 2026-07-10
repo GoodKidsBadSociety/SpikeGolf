@@ -17,6 +17,12 @@
   ];
   const AVATAR_COLORS = ['#2d6a4f','#40916c','#e08e0b','#c0392b','#2f6fb3','#7b4fb3','#0e8a7f','#b3532f'];
 
+  // Aerial map of the alm (cropped from the satellite screenshot).
+  // Positions are stored as fractions (0..1) of the image, so the
+  // image can be swapped for a higher-res version later.
+  const MAP = { src: 'map.jpg', aspect: 1065 / 990 };
+  const ROUTE_COLORS = ['#ffd23f','#4dabf7','#ff6b35','#da77f2','#63e6be','#ffa94d','#74c0fc','#f783ac'];
+
   /* ---------------- State ---------------- */
   const defaultState = () => ({
     players: [],   // {id, name, color}
@@ -88,6 +94,82 @@
     return rows;
   }
 
+  /* ---------------- Map rendering ---------------- */
+  const hasRoute = (c) => !!(c.startPos && c.endPos);
+
+  // Geometry of a course route in SVG viewBox units (1000 x 1000*aspect).
+  function routeGeom(c) {
+    const W = 1000, H = Math.round(1000 * MAP.aspect);
+    const x1 = c.startPos.x * W, y1 = c.startPos.y * H;
+    const x2 = c.endPos.x * W, y2 = c.endPos.y * H;
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1;
+    const off = Math.min(60, len * 0.18); // gentle arc
+    const cx = (x1 + x2) / 2 - dy / len * off;
+    const cy = (y1 + y2) / 2 + dx / len * off;
+    return { x1, y1, x2, y2, cx, cy, W, H };
+  }
+
+  function routeSvg(c, colorIdx) {
+    if (!hasRoute(c)) return '';
+    const g = routeGeom(c);
+    const d = `M${g.x1.toFixed(1)},${g.y1.toFixed(1)} Q${g.cx.toFixed(1)},${g.cy.toFixed(1)} ${g.x2.toFixed(1)},${g.y2.toFixed(1)}`;
+    const col = ROUTE_COLORS[colorIdx % ROUTE_COLORS.length];
+    return `<path d="${d}" fill="none" stroke="rgba(10,25,15,0.55)" stroke-width="11" stroke-linecap="round" stroke-dasharray="1 16"/>
+      <path d="${d}" fill="none" stroke="${col}" stroke-width="6.5" stroke-linecap="round" stroke-dasharray="1 16"/>`;
+  }
+
+  function mapMarkers(c, opts = {}) {
+    const pct = (p) => `left:${(p.x * 100).toFixed(2)}%;top:${(p.y * 100).toFixed(2)}%`;
+    let h = '';
+    if (c.startPos) h += `<span class="mk mk-flag" style="${pct(c.startPos)}">🚩</span>`;
+    if (c.endPos) h += `<span class="mk mk-finish" style="${pct(c.endPos)}">🏁</span>`;
+    (c.obstacles || []).forEach(o => {
+      if (!o.pos) return;
+      const t = OBSTACLE_TYPES.find(x => x.key === o.type) || OBSTACLE_TYPES[5];
+      h += `<span class="mk mk-obs" data-obs="${o.id}" style="${pct(o.pos)}">${t.emoji}</span>`;
+    });
+    if (opts.badge != null && hasRoute(c)) {
+      const g = routeGeom(c);
+      const bx = (0.25 * g.x1 + 0.5 * g.cx + 0.25 * g.x2) / g.W * 100;
+      const by = (0.25 * g.y1 + 0.5 * g.cy + 0.25 * g.y2) / g.H * 100;
+      h += `<button class="mk mk-badge ${coursePlayed(c.id) ? 'done' : ''}" data-badge="${c.id}"
+        style="left:${bx.toFixed(2)}%;top:${by.toFixed(2)}%">${opts.badge}</button>`;
+    }
+    return h;
+  }
+
+  // items: [{ course, n?, colorIdx? }] — renders the aerial map with routes/markers.
+  function mapBlock(items, opts = {}) {
+    const H = Math.round(1000 * MAP.aspect);
+    let svg = '', marks = '';
+    items.forEach((it, i) => {
+      svg += routeSvg(it.course, it.colorIdx ?? i);
+      marks += mapMarkers(it.course, { badge: it.n });
+    });
+    return `<div class="map-frame">
+      <div class="map-scroll" style="${opts.maxHeight ? `max-height:${opts.maxHeight}` : ''}">
+        <div class="map-wrap ${opts.editing ? 'editing' : ''}" ${opts.id ? `id="${opts.id}"` : ''}>
+          <img src="${MAP.src}" alt="Karte der Alm">
+          <svg viewBox="0 0 1000 ${H}" preserveAspectRatio="none">${svg}</svg>
+          ${marks}
+        </div>
+      </div>
+      ${opts.zoom ? `<button class="map-zoom" data-zoom aria-label="Zoom">⊕</button>` : ''}
+    </div>`;
+  }
+
+  // Wire zoom toggle for a rendered mapBlock (call after inserting into DOM).
+  function wireMapZoom(frame) {
+    const btn = frame.querySelector('[data-zoom]');
+    if (!btn) return;
+    const wrap = frame.querySelector('.map-wrap');
+    btn.addEventListener('click', () => {
+      const zoomed = wrap.style.width === '220%';
+      wrap.style.width = zoomed ? '100%' : '220%';
+      btn.textContent = zoomed ? '⊕' : '⊖';
+    });
+  }
+
   /* ---------------- Toast ---------------- */
   let toastTimer;
   function toast(msg) {
@@ -119,6 +201,7 @@
     ({
       leaderboard: renderLeaderboard,
       play: renderPlay,
+      map: renderMap,
       courses: renderCourses,
       players: renderPlayers,
     }[state.tab] || renderLeaderboard)();
@@ -128,9 +211,13 @@
   function renderLeaderboard() {
     const rows = leaderboard();
     const anyPlayed = rows.some(r => r.played > 0);
-    let html = `<div class="view-head">
-      <h1 class="view-title">Rangliste</h1>
-      <p class="view-desc">Gesamtschläge über alle Kurse — wer am wenigsten braucht, führt.</p>
+    let html = `<div class="hero">
+      <img src="hero.jpg" alt="Obiralmhütte">
+      <div class="hero-grad"></div>
+      <div class="hero-text">
+        <h1>Rangliste</h1>
+        <p>Obiralm-Turnier · Gesamtschläge über alle Kurse — wenig gewinnt.</p>
+      </div>
     </div>`;
 
     if (state.players.length === 0) {
@@ -227,6 +314,7 @@
         <span class="par-pill">Par ${Number(active.par) || 0}</span>
       </div>
       ${obstaclesHtml(active.obstacles)}
+      ${hasRoute(active) ? `<div style="margin-top:12px">${mapBlock([{ course: active, colorIdx: state.courses.indexOf(active) }], { zoom: true, maxHeight: '260px' })}</div>` : ''}
     </div>`;
 
     // player steppers
@@ -255,6 +343,9 @@
     }
 
     view.innerHTML = html;
+
+    const mapFrame = $('.map-frame', view);
+    if (mapFrame) wireMapZoom(mapFrame);
 
     // wire course tabs
     $('#courseTabs').addEventListener('click', (e) => {
@@ -299,6 +390,57 @@
     rowEl.querySelector('.small.muted').textContent = parDiffText(n, course.par);
   }
 
+  /* ---------- Map overview ---------- */
+  function renderMap() {
+    const placed = state.courses
+      .map((c, i) => ({ course: c, n: i + 1, colorIdx: i }))
+      .filter(x => hasRoute(x.course));
+
+    let html = `<div class="view-head">
+      <h1 class="view-title">Karte</h1>
+      <p class="view-desc">Alle Bahnen auf der Alm — Nummer antippen, um sie zu spielen.</p>
+    </div>`;
+
+    html += mapBlock(placed, { zoom: true });
+
+    if (placed.length === 0) {
+      html += `<div class="card" style="margin-top:14px"><div class="empty" style="padding:20px 8px">
+        <span class="empty-emoji">🗺️</span>
+        <h3>Noch keine Bahn eingezeichnet</h3>
+        <p>Beim Anlegen oder Bearbeiten eines Kurses kannst du Start 🚩, Ziel 🏁 und Hindernisse direkt auf der Karte platzieren.</p>
+        <button class="btn btn-primary" onclick="editCourse()">Kurs einzeichnen</button>
+      </div></div>`;
+    } else {
+      html += `<div class="map-legend">`;
+      placed.forEach(({ course: c, n, colorIdx }) => {
+        const done = coursePlayed(c.id);
+        html += `<div class="rank-row tap" onclick="playCourse('${c.id}')">
+          <div class="rank-badge" style="background:${ROUTE_COLORS[colorIdx % ROUTE_COLORS.length]};color:#1b2a20">${n}</div>
+          <div class="grow">
+            <div class="rank-name truncate">${esc(c.name)}</div>
+            <div class="rank-meta">${esc(c.start || 'Start')} → ${esc(c.end || 'Ziel')} · Par ${Number(c.par) || 0}</div>
+          </div>
+          <span>${done ? '✅' : '▶️'}</span>
+        </div>`;
+      });
+      html += `</div>`;
+      const unplaced = state.courses.filter(c => !hasRoute(c));
+      if (unplaced.length) {
+        html += `<p class="map-hint">📍 ${unplaced.length} Kurs${unplaced.length > 1 ? 'e' : ''} noch ohne Position — beim Bearbeiten auf der Karte einzeichnen.</p>`;
+      }
+    }
+
+    view.innerHTML = html;
+    wireMapZoom($('.map-frame', view));
+    view.querySelectorAll('[data-badge]').forEach(b =>
+      b.addEventListener('click', () => playCourse(b.dataset.badge)));
+  }
+
+  function playCourse(id) {
+    state.activeCourseId = id;
+    go('play');
+  }
+
   /* ---------- Courses ---------- */
   function renderCourses() {
     let html = `<div class="view-head">
@@ -322,6 +464,7 @@
         </div>
         <div class="route"><b>🚩 ${esc(c.start || 'Start')}</b><span class="dots"></span><b>${esc(c.end || 'Ziel')} 🏁</b></div>
         ${c.elevation ? `<div class="small muted" style="margin-top:6px">⛰️ ${esc(c.elevation)}</div>` : ''}
+        ${hasRoute(c) ? `<div class="small muted" style="margin-top:6px">📍 Auf der Karte eingezeichnet</div>` : ''}
         ${obstaclesHtml(c.obstacles)}
       </div>`;
     });
@@ -436,7 +579,16 @@
           <input type="text" id="cElev" placeholder="+8 m" value="${c ? esc(c.elevation || '') : ''}"></label>
       </div>
 
-      <label class="field"><span>Hindernisse</span></label>
+      <div class="section-label" style="margin-top:2px">Auf der Karte einzeichnen</div>
+      <div class="map-modes" id="mapModes">
+        <button class="type-opt on" data-mode="start">🚩 Start</button>
+        <button class="type-opt" data-mode="end">🏁 Ziel</button>
+        <button class="type-opt" data-mode="obs">🌲 Hindernis</button>
+      </div>
+      <div id="edMap"></div>
+      <p class="map-hint" id="mapHint"></p>
+
+      <label class="field" style="margin-top:16px"><span>Hindernisse</span></label>
       <div id="obsList"></div>
       <div class="section-label" style="margin-top:4px">Hindernis hinzufügen</div>
       <div class="pill-select" id="obsTypes"></div>
@@ -453,7 +605,12 @@
     const typesBox = $('#obsTypes', box);
     OBSTACLE_TYPES.forEach(t => {
       const b = el(`<button class="type-opt ${t.key === selType ? 'on' : ''}" data-t="${t.key}">${t.emoji} ${t.label}</button>`);
-      b.addEventListener('click', () => { selType = t.key; typesBox.querySelectorAll('.type-opt').forEach(x => x.classList.toggle('on', x === b)); });
+      b.addEventListener('click', () => {
+        selType = t.key;
+        typesBox.querySelectorAll('.type-opt').forEach(x => x.classList.toggle('on', x === b));
+        const mo = $('#mapModes [data-mode="obs"]', box);
+        if (mo) mo.innerHTML = `${t.emoji} Hindernis`;
+      });
       typesBox.appendChild(b);
     });
 
@@ -463,12 +620,78 @@
       list.innerHTML = '';
       obstacles.forEach((o, i) => {
         const t = OBSTACLE_TYPES.find(x => x.key === o.type) || OBSTACLE_TYPES[5];
-        const chip = el(`<span class="chip" style="margin:0 6px 8px 0">${t.emoji} ${esc(o.text || t.label)} <span class="x">✕</span></span>`);
-        chip.querySelector('.x').addEventListener('click', () => { obstacles.splice(i, 1); renderObs(); });
+        const chip = el(`<span class="chip" style="margin:0 6px 8px 0">${t.emoji} ${esc(o.text || t.label)}${o.pos ? ' 📍' : ''} <span class="x">✕</span></span>`);
+        chip.querySelector('.x').addEventListener('click', () => { obstacles.splice(i, 1); renderObs(); redrawMap(); });
         list.appendChild(chip);
       });
     };
     renderObs();
+
+    /* --- map editor: tap to place start / end / obstacles --- */
+    const draft = {
+      startPos: c && c.startPos ? { ...c.startPos } : null,
+      endPos: c && c.endPos ? { ...c.endPos } : null,
+      obstacles, // shared reference — chips and map stay in sync
+    };
+    const colorIdx = c ? state.courses.indexOf(c) : state.courses.length;
+    let mapMode = draft.startPos ? (draft.endPos ? 'obs' : 'end') : 'start';
+    let mapZoomed = false;
+    const HINTS = {
+      start: 'Tippe auf die Karte, um den Start 🚩 zu setzen.',
+      end: 'Tippe auf die Karte, um das Ziel 🏁 zu setzen.',
+      obs: 'Tippe auf die Karte, um das unten gewählte Hindernis zu platzieren. Marker antippen = entfernen.',
+    };
+
+    function setMode(m) {
+      mapMode = m;
+      box.querySelectorAll('#mapModes .type-opt').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+      $('#mapHint', box).textContent = HINTS[m];
+    }
+
+    function redrawMap() {
+      const holder = $('#edMap', box);
+      holder.innerHTML = mapBlock([{ course: draft, colorIdx }], { editing: true, zoom: true });
+      const frame = holder.firstElementChild;
+      const wrap = frame.querySelector('.map-wrap');
+      const zoomBtn = frame.querySelector('[data-zoom]');
+      if (mapZoomed) { wrap.style.width = '220%'; zoomBtn.textContent = '⊖'; }
+      zoomBtn.addEventListener('click', () => {
+        mapZoomed = !mapZoomed;
+        wrap.style.width = mapZoomed ? '220%' : '100%';
+        zoomBtn.textContent = mapZoomed ? '⊖' : '⊕';
+      });
+      wrap.addEventListener('click', (e) => {
+        const obsEl = e.target.closest('[data-obs]');
+        if (obsEl) {
+          const idx = obstacles.findIndex(o => o.id === obsEl.dataset.obs);
+          if (idx >= 0) { obstacles.splice(idx, 1); renderObs(); redrawMap(); }
+          return;
+        }
+        const r = wrap.getBoundingClientRect();
+        const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+        const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+        if (mapMode === 'start') {
+          draft.startPos = { x, y };
+          setMode(draft.endPos ? 'obs' : 'end');
+        } else if (mapMode === 'end') {
+          draft.endPos = { x, y };
+          setMode('obs');
+        } else {
+          const t = OBSTACLE_TYPES.find(z => z.key === selType);
+          obstacles.push({ id: uid(), type: selType, text: $('#obsText', box).value.trim() || t.label, pos: { x, y } });
+          $('#obsText', box).value = '';
+          renderObs();
+        }
+        redrawMap();
+      });
+    }
+
+    $('#mapModes', box).addEventListener('click', (e) => {
+      const b = e.target.closest('[data-mode]');
+      if (b) setMode(b.dataset.mode);
+    });
+    setMode(mapMode);
+    redrawMap();
 
     $('#obsAdd', box).addEventListener('click', () => {
       const txt = $('#obsText', box).value.trim();
@@ -489,6 +712,8 @@
         par: Math.max(0, parseInt($('#cPar', box).value, 10) || 0),
         elevation: $('#cElev', box).value.trim(),
         obstacles,
+        startPos: draft.startPos || null,
+        endPos: draft.endPos || null,
       };
       if (c) Object.assign(c, data);
       else state.courses.push({ id: uid(), ...data });
@@ -572,7 +797,7 @@
   }
 
   // expose for inline onclick handlers
-  Object.assign(window, { go, nextCourse, resetScores, editPlayer, editCourse });
+  Object.assign(window, { go, nextCourse, resetScores, editPlayer, editCourse, playCourse });
 
   /* ============================================================
      Wire up + boot

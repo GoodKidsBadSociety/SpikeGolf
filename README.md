@@ -12,7 +12,10 @@ Die Daten werden lokal auf dem Handy gespeichert.
 
 - 👤 **Spieler** anlegen, benennen und mit eigener Farbe versehen
 - ⛳ **Kurse** definieren: Start, Ziel, Par (Ziel-Schlagzahl), optional Höhenmeter
-- 🌲🏠🪨 **Hindernisse** pro Kurs (Baum, Dach, Stein, Zaun, Wasser, Sonstiges) mit eigener Beschreibung
+- 🗺️ **Luftbild-Karte der Alm**: Start 🚩, Ziel 🏁 und Hindernisse direkt auf dem
+  Satellitenbild antippen und platzieren — die Bahn wird als gepunktete Route eingezeichnet
+- 🧭 **Karten-Tab**: alle Bahnen nummeriert auf der Karte, Nummer antippen → direkt spielen
+- 🌲🏠🪨 **Hindernisse** pro Kurs (Baum, Dach, Stein, Zaun, Wasser, Sonstiges) mit eigener Beschreibung, wahlweise auf der Karte platziert
 - 🎯 **Spielen**: pro Kurs die Schläge jedes Spielers mit großen +/− Buttons zählen (auto-gespeichert)
 - 🏆 **Rangliste**: Gesamtschläge über alle Kurse pro Person, mit Par-Differenz (wie beim Golf: wenig = gut)
 - 📤 **Backup**: Daten exportieren/importieren (JSON) übers ⋯-Menü
@@ -50,12 +53,23 @@ python3 -m http.server 8000
 | `app.js` | Gesamte Logik + Datenhaltung (localStorage) |
 | `manifest.webmanifest` | PWA-Metadaten (Name, Icons, Farben) |
 | `sw.js` | Service Worker für Offline-Betrieb |
+| `map.jpg` | Luftbild der Alm (Kartengrundlage) |
+| `hero.jpg` | Panorama-Banner (aus dem DJI-Drohnenfoto) |
 | `icons/` | App-Icons (180/192/512 px) |
 | `tools/make_icons.py` | Erzeugt die Icons (pure Python, ohne Abhängigkeiten) |
+| `tools/make_map.mjs` | Schneidet `map.jpg` aus einem Karten-Screenshot zu |
 | `tools/test_app.mjs` | End-to-End-Test des kompletten Ablaufs |
+
+## Karte austauschen
+
+Die Positionen werden als **Bruchteile (0–1)** des Bildes gespeichert — `map.jpg`
+kann also später durch eine höher aufgelöste Version **desselben Ausschnitts**
+ersetzt werden, ohne dass eingezeichnete Kurse verrutschen. Einfach neue Datei
+als `map.jpg` ablegen (und in `app.js` ggf. `MAP.aspect` = Höhe/Breite anpassen).
 
 ## Ideen für später
 
-- ⛰️ Echte **Elevation/GPS** – Start/Ziel per Karte setzen und Höhenmeter automatisch
+- 🖼️ Höher aufgelöstes Luftbild als Kartengrundlage
+- ⛰️ Echte **Elevation/GPS** – Höhenmeter automatisch bestimmen
 - 📊 Verlauf mehrerer Turniere / Historie
 - 🔗 Ergebnisse als Bild teilen
