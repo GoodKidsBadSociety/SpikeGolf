@@ -10,7 +10,7 @@
                  so users don't re-download ~90 MB on every
                  release.
 */
-const APP_CACHE   = 'spikegolf-app-v15';
+const APP_CACHE   = 'spikegolf-app-v16';
 const HEAVY_CACHE = 'spikegolf-heavy-v1';
 
 const APP_ASSETS = [
@@ -18,6 +18,8 @@ const APP_ASSETS = [
   './index.html',
   './styles.css',
   './app.js',
+  './sync.js',
+  './config.js',
   './manifest.webmanifest',
 ];
 
@@ -70,8 +72,10 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // Google Fonts → stale-while-revalidate in HEAVY_CACHE (they rarely change).
-  if (url.host === 'fonts.googleapis.com' || url.host === 'fonts.gstatic.com') {
+  // Google Fonts + esm.sh (supabase-js) → stale-while-revalidate in HEAVY_CACHE.
+  if (url.host === 'fonts.googleapis.com'
+      || url.host === 'fonts.gstatic.com'
+      || url.host === 'esm.sh') {
     e.respondWith((async () => {
       const cache = await caches.open(HEAVY_CACHE);
       const cached = await cache.match(req);
@@ -83,6 +87,9 @@ self.addEventListener('fetch', (e) => {
     })());
     return;
   }
+
+  // Supabase Realtime WebSocket and REST → never cache, always live.
+  if (url.host.endsWith('.supabase.co')) return;
 
   // Same-origin: split by asset kind.
   if (url.origin === self.location.origin) {

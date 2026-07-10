@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from './vendor/three/GLTFLoader.js';
 import { OrbitControls } from './vendor/three/OrbitControls.js';
+import { initSync, pushState, flushState, syncEnabled } from './sync.js';
 
 const STORE_KEY = 'spikegolf.v2';
 const LEGACY_KEY = 'spikegolf.v1';
@@ -85,6 +86,25 @@ function migrateStateShape(s) {
 function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   catch (e) { console.warn('save failed', e); }
+  pushState(state);
+}
+
+function applyRemoteState(remote) {
+  if (!remote || typeof remote !== 'object') return;
+  // Preserve the user's current UI position (tab, active course, sub, selection).
+  const uiKeep = {
+    tab: state.tab,
+    activeCourseId: state.activeCourseId,
+    activeRoundId: state.activeRoundId,
+    selectedCourseId: state.selectedCourseId,
+    playSub: state.playSub,
+  };
+  const merged = Object.assign(defaultState(), remote, uiKeep);
+  migrateStateShape(merged);
+  state = merged;
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {}
+  if (typeof rebuildAllRoutes === 'function') rebuildAllRoutes();
+  if (typeof render === 'function') render();
 }
 
 const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
@@ -1764,7 +1784,7 @@ function openMenu() {
     <button class="btn btn-block" id="mExport" style="margin-top:10px">↓ Backup exportieren</button>
     <button class="btn btn-block" id="mImport" style="margin-top:10px">↑ Backup importieren</button>
     <button class="btn btn-danger btn-block" id="mWipe" style="margin-top:10px">✕ Alles löschen</button>
-    <p class="mono small muted" style="text-align:center;margin-top:22px;letter-spacing:0.16em;text-transform:uppercase">Spikegolf · GKBS · Obiralm · offline</p>
+    <p class="mono small muted" style="text-align:center;margin-top:22px;letter-spacing:0.16em;text-transform:uppercase">Spikegolf · GKBS · Obiralm · ${syncEnabled() ? 'cloud sync' : 'offline'}</p>
   </div>`);
   $('#mCam', box).addEventListener('click', () => { closeSheet(); resetCamera(); });
   $('#mExport', box).addEventListener('click', exportData);
@@ -1822,6 +1842,21 @@ $('#camReset').addEventListener('click', resetCamera);
 
 initScene();
 loadTerrain().catch(() => {}).finally(() => { render(); });
+
+// Cloud sync (Supabase). Runs only when config.js has URL + key.
+// Silent if unconfigured — app stays local-only.
+(async () => {
+  if (!syncEnabled()) return;
+  try {
+    const { enabled, initialData } = await initSync({ applyRemote: applyRemoteState });
+    if (!enabled) return;
+    if (initialData) applyRemoteState(initialData);
+    // Flush pending writes on suspend so we don't lose the last edit.
+    const flush = () => flushState(state);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+    window.addEventListener('pagehide', flush);
+  } catch (e) { console.warn('sync init failed', e); }
+})();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
