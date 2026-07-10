@@ -266,6 +266,8 @@ function wirePlacementPointer(canvas) {
   canvas.addEventListener('pointerdown', (e) => {
     if (!scene3.placementMode) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // Block iOS text-selection callout during long-press
+    if (e.pointerType === 'touch' && e.cancelable) e.preventDefault();
     pressStart = { x: e.clientX, y: e.clientY, t: performance.now() };
     showPressRing(e.clientX, e.clientY);
     pressTimer = setTimeout(() => {
@@ -274,7 +276,7 @@ function wirePlacementPointer(canvas) {
       const s = pressStart; pressStart = null;
       if (s) placementRaycast(s.x, s.y, 'terrain');
     }, PRESS_HOLD_MS);
-  }, { passive: true });
+  }, { passive: false });
 
   canvas.addEventListener('pointermove', (e) => {
     if (!pressStart) return;

@@ -1,5 +1,5 @@
 /* Spikegolf service worker — offline-first cache */
-const CACHE = 'spikegolf-v13';
+const CACHE = 'spikegolf-v14';
 
 const CORE_ASSETS = [
   './',

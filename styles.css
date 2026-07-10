@@ -68,6 +68,11 @@ input, textarea, select { font: inherit; color: inherit; }
   background:
     radial-gradient(120% 80% at 50% 0%, #142521 0%, #060d0a 55%, #030704 100%);
   touch-action: none;
+  /* Suppress iOS text-selection callout on long-press. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Grain + vignette were creating a darkening overlay on the map.
