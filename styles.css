@@ -83,6 +83,23 @@ input, textarea, select { font: inherit; color: inherit; }
    User asked for neither — keep the map bright at any zoom level. */
 #grain, #vignette { display: none !important; }
 
+/* Top/bottom shades sit between the map and the HUD chrome so the
+   floating panels don't reveal orbiting terrain behind them. */
+#topShade, #bottomShade {
+  position: fixed; left: 0; right: 0;
+  z-index: 3; pointer-events: none;
+}
+#topShade {
+  top: 0;
+  height: calc(var(--safe-top) + 110px);
+  background: linear-gradient(180deg, #0f1c17 0%, rgba(15,28,23,0.9) 45%, rgba(15,28,23,0) 100%);
+}
+#bottomShade {
+  bottom: 0;
+  height: calc(var(--safe-bottom) + var(--nav-h) + 40px);
+  background: linear-gradient(180deg, rgba(3,8,5,0) 0%, rgba(3,8,5,0.55) 30%, rgba(3,8,5,0.9) 70%, #060d0a 100%);
+}
+
 /* ---------- Boot loader ---------- */
 #boot {
   position: fixed; inset: 0; z-index: 100;
@@ -187,7 +204,7 @@ input, textarea, select { font: inherit; color: inherit; }
 /* ---------- HUD content panel ---------- */
 .hud-panel {
   margin: 8px 14px 8px;
-  padding: 16px 18px 22px;
+  padding: 16px 18px 26px;
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--line);
@@ -197,7 +214,9 @@ input, textarea, select { font: inherit; color: inherit; }
     inset 0 1px 0 rgba(255,255,255,0.03);
   overflow-y: auto; overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  max-height: calc(100dvh - var(--nav-h) - var(--safe-top) - var(--safe-bottom) - 120px);
+  /* Leave a healthy strip above the floating nav so no button
+     ever hides behind it, even mid-scroll. */
+  max-height: calc(100dvh - var(--nav-h) - var(--safe-top) - var(--safe-bottom) - 140px);
   max-width: 720px; width: calc(100% - 28px); margin-left: auto; margin-right: auto;
   scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent;
   /* Only take content height — the free space below is the 3D map. */
@@ -520,9 +539,9 @@ input::placeholder { color: var(--ink-mute); }
 /* ---------- HUD nav ---------- */
 .hud-nav {
   display: flex; justify-content: space-around; align-items: center;
-  height: calc(var(--nav-h) + var(--safe-bottom));
-  padding: 4px 12px calc(4px + var(--safe-bottom));
-  margin: 6px auto max(6px, var(--safe-bottom));
+  height: var(--nav-h);
+  padding: 4px 12px;
+  margin: 4px auto calc(4px + var(--safe-bottom));
   max-width: 640px; width: calc(100% - 28px);
   background: var(--glass-bg-strong);
   backdrop-filter: var(--glass-blur);
