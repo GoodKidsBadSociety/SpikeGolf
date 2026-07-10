@@ -1128,10 +1128,161 @@ function toParLabel(t) {
   return `<div class="rank-topar topar-over">+${t} über</div>`;
 }
 
+/* ---------- Winner celebration: confetti + fireworks ----------
+   Canvas2D particle system. One-shot per round.id — coming back
+   to the winner screen doesn't re-trigger if already celebrated.
+*/
+const _celebratedRoundIds = new Set();
+function celebrateWinner(round, winnerColor) {
+  if (_celebratedRoundIds.has(round.id)) return;
+  _celebratedRoundIds.add(round.id);
+  const cvs = document.getElementById('confetti');
+  if (!cvs) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const size = () => {
+    cvs.width = Math.floor(window.innerWidth * dpr);
+    cvs.height = Math.floor(window.innerHeight * dpr);
+    cvs.style.width = window.innerWidth + 'px';
+    cvs.style.height = window.innerHeight + 'px';
+  };
+  size();
+  const ctx = cvs.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = window.innerWidth, H = window.innerHeight;
+
+  // Palette: winner color first (dominant), then whole player set.
+  const players = roundPlayers(round);
+  const palette = [winnerColor, ...players.map(p => p.color).filter(c => c !== winnerColor), '#ffe1a3', '#ffb547'];
+
+  const parts = [];
+  const now = () => performance.now();
+  const t0 = now();
+  const DURATION = 6000;
+
+  // Confetti fall from the top (fills the whole screen quickly)
+  const CONFETTI_N = Math.min(260, Math.round(W / 3));
+  for (let i = 0; i < CONFETTI_N; i++) {
+    parts.push({
+      kind: 'confetti',
+      x: Math.random() * W,
+      y: -20 - Math.random() * H * 0.7,
+      vx: (Math.random() - 0.5) * 4,
+      vy: 2 + Math.random() * 4,
+      w: 5 + Math.random() * 8,
+      h: 8 + Math.random() * 14,
+      rot: Math.random() * Math.PI * 2,
+      vrot: (Math.random() - 0.5) * 0.35,
+      color: palette[Math.floor(Math.random() * palette.length)],
+      shape: Math.random() < 0.5 ? 'rect' : 'strip',
+      born: t0,
+      life: DURATION,
+    });
+  }
+
+  // Schedule a few firework bursts staggered over 2.5s.
+  const bursts = [
+    { at:  120, x: W * 0.25, y: H * 0.35 },
+    { at:  520, x: W * 0.75, y: H * 0.25 },
+    { at:  920, x: W * 0.50, y: H * 0.20 },
+    { at: 1520, x: W * 0.35, y: H * 0.30 },
+    { at: 2100, x: W * 0.65, y: H * 0.35 },
+  ];
+
+  function spawnBurst(cx, cy) {
+    const N = 55;
+    const seed = Math.random() * Math.PI * 2;
+    for (let i = 0; i < N; i++) {
+      const angle = seed + (i / N) * Math.PI * 2 + (Math.random() - 0.5) * 0.15;
+      const speed = 3.5 + Math.random() * 5.5;
+      parts.push({
+        kind: 'spark',
+        x: cx, y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        w: 3 + Math.random() * 2.5,
+        color: palette[Math.floor(Math.random() * palette.length)],
+        born: now(),
+        life: 900 + Math.random() * 400,
+        trail: [],
+      });
+    }
+  }
+
+  cvs.classList.add('on');
+  let raf;
+  function step() {
+    const t = now();
+    const el = t - t0;
+    ctx.clearRect(0, 0, W, H);
+
+    // Fire bursts scheduled
+    while (bursts.length && bursts[0].at <= el) {
+      const b = bursts.shift();
+      spawnBurst(b.x, b.y);
+    }
+
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      const age = t - p.born;
+      if (age > p.life) { parts.splice(i, 1); continue; }
+      // physics
+      if (p.kind === 'confetti') {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.08;
+        p.vx *= 0.996;
+        p.rot += p.vrot;
+        if (p.y > H + 40) { parts.splice(i, 1); continue; }
+      } else if (p.kind === 'spark') {
+        p.trail.push({ x: p.x, y: p.y });
+        if (p.trail.length > 6) p.trail.shift();
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.06;
+        p.vx *= 0.985;
+        p.vy *= 0.985;
+      }
+      // draw
+      const lifeT = age / p.life;
+      const alpha = lifeT < 0.85 ? 1 : Math.max(0, 1 - (lifeT - 0.85) / 0.15);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      if (p.kind === 'confetti') {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        if (p.shape === 'rect') ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        else { ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * 0.35); ctx.fillRect(-p.w / 2, p.h * 0.05, p.w, p.h * 0.35); }
+        ctx.restore();
+      } else {
+        // Trail as small alpha squares.
+        for (let j = 0; j < p.trail.length; j++) {
+          const tt = p.trail[j];
+          const a = ((j + 1) / p.trail.length) * 0.7 * alpha;
+          ctx.globalAlpha = a;
+          ctx.fillRect(tt.x - p.w / 2, tt.y - p.w / 2, p.w, p.w);
+        }
+        ctx.globalAlpha = alpha;
+        ctx.fillRect(p.x - p.w / 2, p.y - p.w / 2, p.w, p.w);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    if (el < DURATION || parts.length) raf = requestAnimationFrame(step);
+    else { cvs.classList.remove('on'); ctx.clearRect(0, 0, W, H); }
+  }
+  raf = requestAnimationFrame(step);
+
+  // Cheerful haptic pulse on capable devices
+  if (navigator.vibrate) navigator.vibrate([12, 40, 20, 40, 20, 80]);
+}
+
 /* ---------- Winner overview ---------- */
 function renderWinner(round) {
   const rows = leaderboard();
   const winner = rows[0];
+  // Fire the celebration once per round.
+  if (winner && winner.player) setTimeout(() => celebrateWinner(round, winner.player.color), 200);
   const runners = rows.slice(1);
   const parTotal = totalPar();
 

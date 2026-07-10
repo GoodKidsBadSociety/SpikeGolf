@@ -10,7 +10,7 @@
                  so users don't re-download ~90 MB on every
                  release.
 */
-const APP_CACHE   = 'spikegolf-app-v25';
+const APP_CACHE   = 'spikegolf-app-v26';
 const HEAVY_CACHE = 'spikegolf-heavy-v1';
 
 const APP_ASSETS = [
