@@ -1920,6 +1920,10 @@ function editCourse(id) {
       <label class="field grow"><span>Ziel-Label</span>
         <input type="text" id="cEnd" placeholder="Brunnen" value="${c ? esc(c.end || '') : ''}"></label>
     </div>
+    <label class="field"><span>Start · Beschreibung (optional)</span>
+      <input type="text" id="cStartNote" placeholder="z. B. Wurf von der Bank" value="${c ? esc(c.startNote || '') : ''}"></label>
+    <label class="field"><span>Ziel · Beschreibung (optional)</span>
+      <input type="text" id="cEndNote" placeholder="z. B. Ball muss im Pool landen" value="${c ? esc(c.endNote || '') : ''}"></label>
     <div class="row" style="gap:10px">
       <label class="field grow"><span>Par</span>
         <input type="number" id="cPar" inputmode="numeric" min="1" placeholder="3" value="${c ? (c.par || '') : ''}"></label>
@@ -1968,6 +1972,8 @@ function editCourse(id) {
       name,
       start: $('#cStart', box).value.trim(),
       end: $('#cEnd', box).value.trim(),
+      startNote: $('#cStartNote', box).value.trim(),
+      endNote: $('#cEndNote', box).value.trim(),
       par: Math.max(0, parseInt($('#cPar', box).value, 10) || 0),
       elevation: $('#cElev', box).value.trim(),
       obstacles: draft.obstacles,
@@ -1998,15 +2004,24 @@ function editCourse(id) {
 /* Sequence strip (used in edit sheet and play view). */
 function renderSequenceStrip(course) {
   const parts = [];
-  parts.push(`<span class="seq-node anchor">🚩 Start</span>`);
+  const startTitle = course.startNote ? ` title="${esc(course.startNote)}"` : '';
+  const endTitle   = course.endNote   ? ` title="${esc(course.endNote)}"`   : '';
+  parts.push(`<span class="seq-node anchor"${startTitle}>🚩 ${esc(course.start || 'Start')}</span>`);
   (course.obstacles || []).forEach((o, i) => {
     const t = OBSTACLE_TYPES.find(x => x.key === o.type) || OBSTACLE_TYPES[5];
     parts.push(`<span class="seq-arrow">›</span>`);
     parts.push(`<span class="seq-node"><b>${i + 1}</b>${t.emoji} ${esc(o.text || t.label)}</span>`);
   });
   parts.push(`<span class="seq-arrow">›</span>`);
-  parts.push(`<span class="seq-node end">🏁 Ziel</span>`);
-  return `<div class="seq-strip">${parts.join('')}</div>`;
+  parts.push(`<span class="seq-node end"${endTitle}>🏁 ${esc(course.end || 'Ziel')}</span>`);
+  let html = `<div class="seq-strip">${parts.join('')}</div>`;
+  if (course.startNote || course.endNote) {
+    const notes = [];
+    if (course.startNote) notes.push(`<div class="seq-note"><span class="seq-note-label">🚩</span> ${esc(course.startNote)}</div>`);
+    if (course.endNote)   notes.push(`<div class="seq-note"><span class="seq-note-label">🏁</span> ${esc(course.endNote)}</div>`);
+    html += `<div class="seq-notes">${notes.join('')}</div>`;
+  }
+  return html;
 }
 
 /* ============================================================
