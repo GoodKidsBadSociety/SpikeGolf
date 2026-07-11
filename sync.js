@@ -62,6 +62,7 @@ export async function initSync({ applyRemote }) {
 
   // Fetch the current row.
   let initialData = null;
+  let initialUpdatedAt = 0;
   try {
     const { data, error } = await client.from('app_state')
       .select('data, updated_at')
@@ -69,6 +70,7 @@ export async function initSync({ applyRemote }) {
       .maybeSingle();
     if (error) console.warn('sync initial fetch failed', error);
     initialData = data ? data.data : null;
+    initialUpdatedAt = data && data.updated_at ? new Date(data.updated_at).getTime() : 0;
   } catch (e) { console.warn('sync initial fetch threw', e); }
 
   // Subscribe to realtime changes.
@@ -84,7 +86,7 @@ export async function initSync({ applyRemote }) {
     .subscribe();
 
   ready = true;
-  return { enabled: true, initialData };
+  return { enabled: true, initialData, initialUpdatedAt };
 }
 
 /**

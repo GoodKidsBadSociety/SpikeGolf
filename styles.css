@@ -60,7 +60,16 @@ html, body {
   /* iOS PWA safe-area painted with app background so the home
      indicator strip blends into the map instead of showing black. */
   background: linear-gradient(180deg, #0f1c17 0%, #0e1a15 65%, #0f1c17 100%);
+  /* Kill iOS double-tap-zoom + 300ms delay on the whole UI. */
+  touch-action: manipulation;
 }
+/* Steppers get hit repeatedly — extra safety against Safari
+   still trying to detect a double-tap zoom gesture there. */
+.step-btn, .btn, button, .tab, .pick-pill, .type-opt, .play-tab, .play-subtab, .wp-btn, .obs-btn {
+  touch-action: manipulation;
+}
+/* Canvas keeps its own gesture handling for orbit/pan/zoom. */
+#stage { touch-action: none; }
 button { font-family: inherit; cursor: pointer; color: inherit; }
 input, textarea, select { font: inherit; color: inherit; }
 

@@ -95,9 +95,29 @@ function migrateStateShape(s) {
   });
 }
 function save() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
-  catch (e) { console.warn('save failed', e); }
+  const now = Date.now();
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORE_KEY + '.ts', String(now));
+  } catch (e) { console.warn('save failed', e); }
   pushState(state);
+}
+
+// Immediate persistence — bypass the sync debounce. Used for score
+// entries so an iPhone going into standby right after a tap won't
+// lose the value.
+function saveNow() {
+  const now = Date.now();
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORE_KEY + '.ts', String(now));
+  } catch (e) { console.warn('saveNow failed', e); }
+  flushState(state);
+}
+
+function localSaveTs() {
+  const raw = localStorage.getItem(STORE_KEY + '.ts');
+  return raw ? Number(raw) : 0;
 }
 
 function applyRemoteState(remote) {
@@ -156,7 +176,7 @@ function setScore(cid, pid, v) {
   const wasComplete = isRoundComplete(r);
   if (!r.scores[cid]) r.scores[cid] = {};
   r.scores[cid][pid] = Math.max(0, v);
-  save();
+  saveNow(); // scores are precious — persist immediately, no debounce
   const nowComplete = isRoundComplete(r);
   if (!wasComplete && nowComplete) {
     setTimeout(() => { toast('🏆 Runde komplett!'); go('leaderboard'); }, 300);
@@ -2116,23 +2136,28 @@ loadTerrain().catch(() => {}).finally(() => { render(); });
 (async () => {
   if (!syncEnabled()) return;
   try {
-    const { enabled, initialData } = await initSync({ applyRemote: applyRemoteState });
+    const { enabled, initialData, initialUpdatedAt } = await initSync({ applyRemote: applyRemoteState });
     if (!enabled) return;
     const remoteHasContent = initialData && (
       (Array.isArray(initialData.players) && initialData.players.length) ||
       (Array.isArray(initialData.courses) && initialData.courses.length) ||
       (Array.isArray(initialData.rounds) && initialData.rounds.length)
     );
-    if (remoteHasContent) {
+    const localTs = localSaveTs();
+    // Local is newer if we saved after remote's updated_at (with 3s slack
+    // for clock skew). In that case NEVER let a stale remote overwrite —
+    // push local up instead.
+    const localIsNewer = localTs && (localTs > initialUpdatedAt + 3000);
+    if (remoteHasContent && !localIsNewer) {
       applyRemoteState(initialData);
     } else {
-      // Remote is fresh — seed it with our local snapshot right away.
       await flushState(state);
     }
     // Flush pending writes on suspend so we don't lose the last edit.
     const flush = () => flushState(state);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
     window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
   } catch (e) { console.warn('sync init failed', e); }
 })();
 
