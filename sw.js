@@ -11,7 +11,7 @@
                  release.
 */
 const APP_CACHE   = 'spikegolf-app-v31';
-const HEAVY_CACHE = 'spikegolf-heavy-v2';
+const HEAVY_CACHE = 'spikegolf-heavy-v3';
 
 const APP_ASSETS = [
   './',
