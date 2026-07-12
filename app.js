@@ -33,6 +33,8 @@ const AVATAR_COLORS = [
   '#a8e061', // lime
 ];
 const ROUTE_COLORS = ['#ffb547','#64c294','#7ab8ff','#c896ff','#e07856','#ffd18a','#4fd1c5','#ff6b6b'];
+// Bonus beacon (orange tennis ball): hit it in real life → −1 stroke.
+const BEACON_COLOR = '#ff7a1a';
 
 /* ============================================================
    State + persistence
@@ -207,6 +209,15 @@ function leaderboard() {
     if (a.played === 0) return 1;
     if (b.played === 0) return -1;
     return a.total - b.total;
+  });
+  // Standard competition ranking: equal totals share a rank (1,2,2,4…),
+  // so ties are genuine ties — nobody is pushed ahead by name/order.
+  let rank = 0, seen = 0, prevTotal = null;
+  rows.forEach(row => {
+    if (row.played === 0) { row.rank = null; return; }
+    seen++;
+    if (prevTotal === null || row.total !== prevTotal) { rank = seen; prevTotal = row.total; }
+    row.rank = rank;
   });
   return rows;
 }
@@ -645,16 +656,17 @@ function buildRoute(course, colorIdx) {
 
 function buildMarkers(course, colorIdx) {
   const color = ROUTE_COLORS[colorIdx % ROUTE_COLORS.length];
-  const add = (pos, emoji, badge, kind) => {
+  const add = (pos, emoji, badge, kind, col) => {
     if (!pos) return;
+    const c = col || color;
     const anchor = new THREE.Vector3(pos.x, pos.y, pos.z);
-    const beacon = makeBeacon(color, 4);
+    const beacon = makeBeacon(c, 4);
     beacon.position.copy(anchor);
     beacon.position.y += 2;
     beacon.userData.courseId = course.id;
     scene3.markerGroup.add(beacon);
 
-    const sprite = makeMarkerSprite(emoji, color, badge);
+    const sprite = makeMarkerSprite(emoji, c, badge);
     sprite.position.set(anchor.x, anchor.y + scene3.radius * 0.05, anchor.z);
     sprite.userData.courseId = course.id;
     sprite.userData.kind = kind;
@@ -669,6 +681,7 @@ function buildMarkers(course, colorIdx) {
     const t = OBSTACLE_TYPES.find(x => x.key === o.type) || OBSTACLE_TYPES[5];
     add(o.pos, t.emoji, i + 1, 'obs');
   });
+  add(course.beaconPos, '🎾', null, 'beacon', BEACON_COLOR);
 }
 
 function clearGroup(g) {
@@ -726,12 +739,13 @@ function drawDraft(course, colorIdx) {
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
     draftGroup.add(new THREE.Mesh(geo, mat));
   }
-  const add = (pos, emoji, badge, wp) => {
+  const add = (pos, emoji, badge, wp, col) => {
     if (!pos) return;
-    const beacon = makeBeacon(color, 4);
+    const c = col || color;
+    const beacon = makeBeacon(c, 4);
     beacon.position.set(pos.x, pos.y + 2, pos.z);
     draftGroup.add(beacon);
-    const sprite = makeMarkerSprite(emoji, color, badge);
+    const sprite = makeMarkerSprite(emoji, c, badge);
     sprite.position.set(pos.x, pos.y + scene3.radius * 0.05, pos.z);
     sprite.userData.baseY = sprite.position.y;
     sprite.userData.phase = Math.random() * Math.PI * 2;
@@ -745,6 +759,7 @@ function drawDraft(course, colorIdx) {
     const t = OBSTACLE_TYPES.find(x => x.key === o.type) || OBSTACLE_TYPES[5];
     add(o.pos, t.emoji, i + 1, { kind: 'obs', index: i });
   });
+  add(course.beaconPos, '🎾', null, { kind: 'beacon' }, BEACON_COLOR);
 }
 function clearDraft() {
   if (draftGroup) { scene3.scene.remove(draftGroup); clearGroup(draftGroup); draftGroup = null; }
@@ -850,6 +865,7 @@ function enterPlacement(course, editorApi) {
     <button class="place-mode-btn" data-mode="start">🚩 Start</button>
     <button class="place-mode-btn" data-mode="end">🏁 Ziel</button>
     <button class="place-mode-btn" data-mode="obs">＋ Hindernis</button>
+    <button class="place-mode-btn beacon" data-mode="beacon">🎾 Beacon</button>
   </div>`);
   const cancel = el(`<button class="place-cancel" id="placeCancel">← Zurück</button>`);
   const done = el(`<button class="place-done" id="placeDone">✓ Fertig</button>`);
@@ -894,6 +910,14 @@ function enterPlacement(course, editorApi) {
       ${course.endPos ? `<button class="wp-btn wp-del" data-act="clear-end" title="Ziel löschen">✕</button>` : ''}
     </div>`);
     list.appendChild(endRow);
+
+    const beaconRow = el(`<div class="wp-item anchor beacon ${course.beaconPos ? 'has' : 'no'}">
+      <div class="wp-badge">🎾</div>
+      <div class="wp-label">Beacon <span class="wp-bonus">−1</span></div>
+      <div class="wp-status">${course.beaconPos ? 'gesetzt' : 'optional'}</div>
+      ${course.beaconPos ? `<button class="wp-btn wp-del" data-act="clear-beacon" title="Beacon löschen">✕</button>` : ''}
+    </div>`);
+    list.appendChild(beaconRow);
   }
 
   side.addEventListener('click', (e) => {
@@ -914,6 +938,8 @@ function enterPlacement(course, editorApi) {
     } else if (op === 'clear' && val === 'end') {
       course.endPos = null;
       if (mode === 'obs') setMode('end');
+    } else if (op === 'clear' && val === 'beacon') {
+      course.beaconPos = null;
     }
     refreshSide();
     editorApi.redraw();
@@ -934,6 +960,10 @@ function enterPlacement(course, editorApi) {
       course.endPos = p;
       setMode('obs');
       refreshSide(); editorApi.redraw(); editorApi.notifyChange && editorApi.notifyChange();
+    } else if (mode === 'beacon') {
+      course.beaconPos = p;
+      refreshSide(); editorApi.redraw(); editorApi.notifyChange && editorApi.notifyChange();
+      toast('🎾 Beacon gesetzt');
     } else {
       openTypePicker((typeKey, text) => {
         if (!typeKey) return;
@@ -953,6 +983,7 @@ function enterPlacement(course, editorApi) {
     if (wp.kind === 'start') { course.startPos = null; if (mode !== 'start') setMode('start'); }
     else if (wp.kind === 'end') { course.endPos = null; if (mode !== 'end') setMode('end'); }
     else if (wp.kind === 'obs') { course.obstacles.splice(wp.index, 1); }
+    else if (wp.kind === 'beacon') { course.beaconPos = null; }
     refreshSide(); editorApi.redraw(); editorApi.notifyChange && editorApi.notifyChange();
     toast('Gelöscht');
   };
@@ -1059,7 +1090,7 @@ function togglePanel() {
   applyPanelChrome();
 }
 // Crisp down-chevron (dark-green stroke on the golden pill via currentColor).
-const CHEV_SVG = '<svg class="chev-i" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 6.2l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const CHEV_SVG = '<svg class="chev-i" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 9.8l4-4 4 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 function applyPanelChrome() {
   document.body.classList.toggle('panel-collapsed', !!state.panelCollapsed);
@@ -1166,11 +1197,12 @@ function renderLeaderboard() {
   }
 
   html += `<div>`;
-  rows.forEach((r, i) => {
-    const rankClass = r.played === 0 ? '' : `rank-${i + 1}`;
-    const badge = r.played === 0 ? '—' : String(i + 1).padStart(2, '0');
+  rows.forEach((r) => {
+    const rankClass = r.played === 0 ? '' : `rank-${Math.min(r.rank, 3)}`;
+    const badge = r.played === 0 ? '—' : String(r.rank).padStart(2, '0');
     const toPar = r.played === 0 ? '' : toParLabel(r.toPar);
-    html += `<div class="rank-row ${i === 0 && r.played ? 'gold' : ''}">
+    const isLead = r.played > 0 && r.rank === 1;
+    html += `<div class="rank-row ${isLead ? 'gold' : ''}">
       <div class="rank-badge ${rankClass}">${badge}</div>
       <div class="avatar" style="background:${r.player.color}">${esc(initials(r.player.name))}</div>
       <div class="grow">
@@ -1363,38 +1395,46 @@ function celebrateWinner(round, winnerColor) {
 /* ---------- Winner overview ---------- */
 function renderWinner(round) {
   const rows = leaderboard();
-  const winner = rows[0];
+  // Everyone tied for first is a winner — shared victory, no name tiebreak.
+  const winners = rows.filter(r => r.played > 0 && r.rank === 1);
+  const primary = winners[0] || rows[0];
+  const tie = winners.length > 1;
   // Fire the celebration once per round.
-  if (winner && winner.player) setTimeout(() => celebrateWinner(round, winner.player.color), 200);
-  const runners = rows.slice(1);
+  if (primary && primary.player) setTimeout(() => celebrateWinner(round, primary.player.color), 200);
+  const runners = rows.filter(r => !winners.includes(r));
   const parTotal = totalPar();
 
+  const namesHtml = tie
+    ? winners.map(w => `<span class="winner-one"><span class="avatar sm" style="background:${w.player.color}">${esc(initials(w.player.name))}</span>${esc(w.player.name)}</span>`).join('<span class="winner-amp">&</span>')
+    : esc(primary.player.name);
+
   let html = `<div class="winner-hero">
-    <div class="winner-crown">🏆</div>
-    <div class="winner-label">Sieger · ${esc(round.name)}</div>
-    <div class="winner-name">${esc(winner.player.name)}</div>
+    <div class="winner-crown">${tie ? '🏆🏆' : '🏆'}</div>
+    <div class="winner-label">${tie ? `Geteilter Sieg · ${esc(round.name)}` : `Sieger · ${esc(round.name)}`}</div>
+    <div class="winner-name ${tie ? 'tie' : ''}">${namesHtml}</div>
     <div class="winner-score">
-      <span class="mono" style="font-size:34px;font-weight:500;letter-spacing:-0.03em">${winner.total}</span>
+      <span class="mono" style="font-size:34px;font-weight:500;letter-spacing:-0.03em">${primary.total}</span>
       <span class="mono small muted" style="letter-spacing:0.14em;text-transform:uppercase;margin-left:6px">Schläge</span>
     </div>
-    <div class="mono small" style="color:${winner.toPar <= 0 ? 'var(--moss-200)' : 'var(--clay)'};letter-spacing:0.14em;text-transform:uppercase;margin-top:4px">
-      ${winner.toPar === 0 ? '± Par' : (winner.toPar < 0 ? `${winner.toPar} unter Par` : `+${winner.toPar} über Par`)}
+    <div class="mono small" style="color:${primary.toPar <= 0 ? 'var(--moss-200)' : 'var(--clay)'};letter-spacing:0.14em;text-transform:uppercase;margin-top:4px">
+      ${primary.toPar === 0 ? '± Par' : (primary.toPar < 0 ? `${primary.toPar} unter Par` : `+${primary.toPar} über Par`)}
     </div>
   </div>`;
 
   if (runners.length) {
     html += `<div class="section-label">Auch dabei</div>`;
-    runners.forEach((r, i) => {
+    runners.forEach((r) => {
+      const rk = r.played === 0 ? '—' : String(r.rank).padStart(2, '0');
       html += `<div class="rank-row">
-        <div class="rank-badge rank-${i + 2}">${String(i + 2).padStart(2, '0')}</div>
+        <div class="rank-badge rank-${r.played === 0 ? '' : Math.min(r.rank, 3)}">${rk}</div>
         <div class="avatar" style="background:${r.player.color}">${esc(initials(r.player.name))}</div>
         <div class="grow">
           <div class="rank-name truncate">${esc(r.player.name)}</div>
-          <div class="rank-meta">${r.total} Schläge · ${r.courseCount} Kurse</div>
+          <div class="rank-meta">${r.played ? r.total + ' Schläge' : 'nicht gespielt'} · ${r.courseCount} Kurse</div>
         </div>
         <div class="rank-score">
-          <div class="rank-total">${r.total}</div>
-          ${toParLabel(r.toPar)}
+          <div class="rank-total">${r.played ? r.total : '—'}</div>
+          ${r.played ? toParLabel(r.toPar) : ''}
         </div>
       </div>`;
     });
@@ -2083,6 +2123,7 @@ function renderSequenceStrip(course) {
   });
   parts.push(`<span class="seq-arrow">›</span>`);
   parts.push(`<span class="seq-node end"${endTitle}>🏁 ${esc(course.end || 'Ziel')}</span>`);
+  if (course.beaconPos) parts.push(`<span class="seq-node beacon">🎾 Beacon −1</span>`);
   let html = `<div class="seq-strip">${parts.join('')}</div>`;
   if (course.startNote || course.endNote) {
     const notes = [];

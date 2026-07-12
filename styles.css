@@ -1220,3 +1220,17 @@ body.panel-collapsed .panel-toggle .chev-i { transform: rotate(180deg); }
   width: 18px; text-align: center; flex: none;
 }
 .avatar.sm { width: 24px; height: 24px; font-size: 10px; border-color: transparent; }
+
+/* ---------- Beacon (bonus tennis ball) ---------- */
+.place-mode-btn.beacon.on { border-color: rgba(255,122,26,0.6); color: #ff9a44; }
+.wp-item.beacon .wp-badge { filter: saturate(1.2); }
+.wp-bonus { color: #ff8c3a; font-family: var(--font-mono); font-size: 11px; font-weight: 700; margin-left: 6px; }
+.seq-node.beacon { color: #ff9a44; border-color: rgba(255,122,26,0.45); }
+
+/* ---------- Shared victory (tie) ---------- */
+.winner-name.tie {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: 6px 10px; font-size: 24px; line-height: 1.15;
+}
+.winner-one { display: inline-flex; align-items: center; gap: 8px; }
+.winner-amp { color: var(--amber-300); font-weight: 300; margin: 0 2px; }
