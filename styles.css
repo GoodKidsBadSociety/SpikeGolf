@@ -1168,14 +1168,17 @@ body.placing #vignette { opacity: 0.7; }
   background: none; border: none; cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
+/* Golden pill with a dark-green chevron. */
 .panel-toggle .chev {
   display: grid; place-items: center;
-  width: 54px; height: 22px; border-radius: 999px;
-  background: var(--glass-bg-strong); border: 1px solid var(--line);
-  color: var(--amber-300); font-size: 15px; line-height: 1;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.35);
-  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  width: 58px; height: 24px; border-radius: 999px;
+  background: linear-gradient(180deg, #ffd97a, #f2ac35);
+  border: 1px solid rgba(120,80,10,0.35);
+  color: #14291d;
+  box-shadow: 0 5px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.55);
+  transition: transform .16s ease;
 }
+.chev-i { display: block; transition: transform .28s cubic-bezier(.4,0,.2,1); }
 .panel-toggle:active .chev { transform: scale(0.9); }
 
 body.panel-collapsed .hud-panel {
@@ -1185,8 +1188,7 @@ body.panel-collapsed .hud-panel {
 }
 body.panel-collapsed .hud-panel > *:not(.panel-toggle) { display: none !important; }
 body.panel-collapsed .panel-toggle { margin: 0; bottom: 0; }
-body.panel-collapsed .panel-toggle .chev { transform: rotate(180deg); }
-body.panel-collapsed .panel-toggle:active .chev { transform: rotate(180deg) scale(0.9); }
+body.panel-collapsed .panel-toggle .chev-i { transform: rotate(180deg); }
 
 /* Per-item accordion: summary always visible, details fold open via a
    chevron centred at the item's bottom edge. */
@@ -1198,13 +1200,13 @@ body.panel-collapsed .panel-toggle:active .chev { transform: rotate(180deg) scal
 .acc-chev {
   position: absolute; left: 50%; bottom: -1px; transform: translateX(-50%);
   display: grid; place-items: center;
-  width: 46px; height: 18px; border-radius: 999px; padding: 0;
-  background: var(--glass-bg-strong); border: 1px solid var(--line);
-  color: var(--amber-300); cursor: pointer; z-index: 2;
-  -webkit-tap-highlight-color: transparent;
+  width: 50px; height: 20px; border-radius: 999px; padding: 0;
+  background: linear-gradient(180deg, #ffd97a, #f2ac35);
+  border: 1px solid rgba(120,80,10,0.35); color: #14291d;
+  box-shadow: 0 3px 9px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+  cursor: pointer; z-index: 2; -webkit-tap-highlight-color: transparent;
 }
-.acc-chev span { font-size: 13px; line-height: 1; transition: transform .28s cubic-bezier(.4,0,.2,1); }
-.acc.open .acc-chev span { transform: rotate(180deg); }
+.acc.open .acc-chev .chev-i { transform: rotate(180deg); }
 .acc-chev:active { transform: translateX(-50%) scale(0.88); }
 
 .acc-detail { padding: 4px 6px 2px; }

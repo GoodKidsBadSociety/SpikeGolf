@@ -1058,11 +1058,15 @@ function togglePanel() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {}
   applyPanelChrome();
 }
+// Crisp down-chevron (dark-green stroke on the golden pill via currentColor).
+const CHEV_SVG = '<svg class="chev-i" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 6.2l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 function applyPanelChrome() {
   document.body.classList.toggle('panel-collapsed', !!state.panelCollapsed);
-  // render() replaced #view's children, so append a fresh handle as the
-  // last (sticky) child, centred at the panel's bottom edge.
-  const t = el(`<button class="panel-toggle" id="panelToggle" onclick="togglePanel()" aria-label="Panel ein- oder ausklappen"><span class="chev">⌄</span></button>`);
+  // togglePanel() calls this WITHOUT re-rendering the view, so remove any
+  // existing handle first — otherwise each toggle stacks a new chevron.
+  view.querySelectorAll('.panel-toggle').forEach(n => n.remove());
+  const t = el(`<button class="panel-toggle" id="panelToggle" onclick="togglePanel()" aria-label="Panel ein- oder ausklappen"><span class="chev">${CHEV_SVG}</span></button>`);
   view.appendChild(t);
 }
 
@@ -1072,7 +1076,7 @@ function accItem(summaryHTML, detailsHTML, open) {
   return `<div class="acc${open ? ' open' : ''}">
     <div class="acc-main">${summaryHTML}</div>
     <div class="acc-body"><div class="acc-body-inner">${detailsHTML}</div></div>
-    <button class="acc-chev" onclick="toggleAcc(this)" aria-label="Details anzeigen"><span>⌄</span></button>
+    <button class="acc-chev" onclick="toggleAcc(this)" aria-label="Details anzeigen">${CHEV_SVG}</button>
   </div>`;
 }
 function toggleAcc(btn) {
