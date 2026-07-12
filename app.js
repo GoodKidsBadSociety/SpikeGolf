@@ -6,7 +6,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from './vendor/three/GLTFLoader.js';
 import { OrbitControls } from './vendor/three/OrbitControls.js';
-import { initSync, pushState, flushState, syncEnabled } from './sync.js';
+import { initSync, pushChanges, flushChanges, syncEnabled } from './sync.js';
+import { stateToKV, kvToState, applyKVChange, diffKV } from './state-kv.js';
 
 const STORE_KEY = 'spikegolf.v2';
 const LEGACY_KEY = 'spikegolf.v1';
@@ -94,45 +95,39 @@ function migrateStateShape(s) {
     if (!Array.isArray(r.courseIds)) r.courseIds = (s.courses || []).map(c => c.id);
   });
 }
+// Snapshot of the shared state as last known to the cloud, keyed per
+// record. save() diffs the live state against this and pushes only the
+// keys that changed, so we never overwrite records other devices edit.
+let lastKV = {};
+
 function save() {
-  const now = Date.now();
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(state));
-    localStorage.setItem(STORE_KEY + '.ts', String(now));
-  } catch (e) { console.warn('save failed', e); }
-  pushState(state);
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+  catch (e) { console.warn('save failed', e); }
+  syncLocalChanges();
 }
 
 // Immediate persistence — bypass the sync debounce. Used for score
 // entries so an iPhone going into standby right after a tap won't
 // lose the value.
 function saveNow() {
-  const now = Date.now();
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(state));
-    localStorage.setItem(STORE_KEY + '.ts', String(now));
-  } catch (e) { console.warn('saveNow failed', e); }
-  flushState(state);
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+  catch (e) { console.warn('saveNow failed', e); }
+  syncLocalChanges();
+  flushChanges(); // push the changed records to the cloud right now
 }
 
-function localSaveTs() {
-  const raw = localStorage.getItem(STORE_KEY + '.ts');
-  return raw ? Number(raw) : 0;
+function syncLocalChanges() {
+  const nextKV = stateToKV(state);
+  const delta = diffKV(lastKV, nextKV);
+  lastKV = nextKV;
+  if (Object.keys(delta.puts).length || delta.dels.length) pushChanges(delta);
 }
 
-function applyRemoteState(remote) {
-  if (!remote || typeof remote !== 'object') return;
-  // Preserve the user's current UI position (tab, active course, sub, selection).
-  const uiKeep = {
-    tab: state.tab,
-    activeCourseId: state.activeCourseId,
-    activeRoundId: state.activeRoundId,
-    selectedCourseId: state.selectedCourseId,
-    playSub: state.playSub,
-  };
-  const merged = Object.assign(defaultState(), remote, uiKeep);
-  migrateStateShape(merged);
-  state = merged;
+// A single remote record changed (value === null ⇒ deleted).
+function applyRemoteChange(key, value) {
+  applyKVChange(state, key, value);
+  if (value === null || value === undefined || value === 0) delete lastKV[key];
+  else lastKV[key] = value;
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {}
   if (typeof rebuildAllRoutes === 'function') rebuildAllRoutes();
   if (typeof render === 'function') render();
@@ -2151,28 +2146,55 @@ loadTerrain().catch(() => {}).finally(() => { render(); });
 (async () => {
   if (!syncEnabled()) return;
   try {
-    const { enabled, initialData, initialUpdatedAt } = await initSync({ applyRemote: applyRemoteState });
-    if (!enabled) return;
-    const remoteHasContent = initialData && (
-      (Array.isArray(initialData.players) && initialData.players.length) ||
-      (Array.isArray(initialData.courses) && initialData.courses.length) ||
-      (Array.isArray(initialData.rounds) && initialData.rounds.length)
-    );
-    const localTs = localSaveTs();
-    // Local is newer if we saved after remote's updated_at (with 3s slack
-    // for clock skew). In that case NEVER let a stale remote overwrite —
-    // push local up instead.
-    const localIsNewer = localTs && (localTs > initialUpdatedAt + 3000);
-    if (remoteHasContent && !localIsNewer) {
-      applyRemoteState(initialData);
-    } else {
-      await flushState(state);
+    const localKV = stateToKV(state);
+    const { enabled, rows, legacy } = await initSync({ applyChange: applyRemoteChange });
+    if (!enabled) { lastKV = {}; return; }
+
+    // Establish the shared baseline. Prefer whatever is already in the
+    // cloud; fall back to migrating the old single-blob row; else start
+    // from our own local state.
+    let remoteKV = {};
+    const haveRows = rows && Object.keys(rows).length > 0;
+    if (haveRows) {
+      remoteKV = rows;
+    } else if (legacy && typeof legacy === 'object') {
+      const migrated = Object.assign(defaultState(), legacy);
+      migrateStateShape(migrated);
+      remoteKV = stateToKV(migrated);
     }
-    // Flush pending writes on suspend so we don't lose the last edit.
-    const flush = () => flushState(state);
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
-    window.addEventListener('pagehide', flush);
-    window.addEventListener('beforeunload', flush);
+
+    // Union: remote wins on shared records, local-only records are kept
+    // and pushed up so nobody's offline work is lost.
+    const mergedKV = { ...remoteKV };
+    const toPush = {};
+    for (const k of Object.keys(localKV)) {
+      if (!(k in remoteKV)) { mergedKV[k] = localKV[k]; toPush[k] = localKV[k]; }
+    }
+
+    // Adopt the merged shared state, keeping this device's UI position.
+    const uiKeep = {
+      tab: state.tab,
+      activeCourseId: state.activeCourseId,
+      activeRoundId: state.activeRoundId,
+      selectedCourseId: state.selectedCourseId,
+      playSub: state.playSub,
+    };
+    state = Object.assign(defaultState(), kvToState(mergedKV), uiKeep);
+    migrateStateShape(state);
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {}
+    lastKV = mergedKV;
+    if (typeof rebuildAllRoutes === 'function') rebuildAllRoutes();
+    render();
+
+    // Seed the cloud: the whole state if the table was empty, otherwise
+    // just our local-only extras.
+    if (!haveRows) pushChanges({ puts: mergedKV, dels: [] });
+    else if (Object.keys(toPush).length) pushChanges({ puts: toPush, dels: [] });
+
+    // Flush pending writes on suspend/unload so we don't lose the last edit.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushChanges(); });
+    window.addEventListener('pagehide', flushChanges);
+    window.addEventListener('beforeunload', flushChanges);
   } catch (e) { console.warn('sync init failed', e); }
 })();
 
