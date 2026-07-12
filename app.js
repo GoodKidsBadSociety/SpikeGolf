@@ -45,6 +45,7 @@ const defaultState = () => ({
   activeCourseId: null,
   tab: 'leaderboard',
   playSub: 'route',
+  panelCollapsed: false,   // UI-only: whole HUD panel folded away (local, not synced)
 });
 
 let state = loadState();
@@ -1029,6 +1030,7 @@ function render() {
   view.classList.toggle('play-route', state.tab === 'play' && state.playSub !== 'scores');
   view.classList.toggle('play-scores', state.tab === 'play' && state.playSub === 'scores');
   (map[state.tab] || renderLeaderboard)();
+  applyPanelChrome();
   updateVisibleCourses();
 
   // Camera behavior per tab
@@ -1046,6 +1048,54 @@ function render() {
     focusOnCourses(state.courses, 700);
     scene3.idleOrbit = (state.tab === 'leaderboard');
   }
+}
+
+/* ---------- Panel collapse + accordions ---------- */
+// Whole floating panel folds away (chevron at bottom-centre) so the 3D
+// map underneath is fully visible. One global toggle across all tabs.
+function togglePanel() {
+  state.panelCollapsed = !state.panelCollapsed;
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {}
+  applyPanelChrome();
+}
+function applyPanelChrome() {
+  document.body.classList.toggle('panel-collapsed', !!state.panelCollapsed);
+  // render() replaced #view's children, so append a fresh handle as the
+  // last (sticky) child, centred at the panel's bottom edge.
+  const t = el(`<button class="panel-toggle" id="panelToggle" onclick="togglePanel()" aria-label="Panel ein- oder ausklappen"><span class="chev">⌄</span></button>`);
+  view.appendChild(t);
+}
+
+// A collapsible list item: summary always visible, details fold open via
+// a chevron centred at the item's bottom edge.
+function accItem(summaryHTML, detailsHTML, open) {
+  return `<div class="acc${open ? ' open' : ''}">
+    <div class="acc-main">${summaryHTML}</div>
+    <div class="acc-body"><div class="acc-body-inner">${detailsHTML}</div></div>
+    <button class="acc-chev" onclick="toggleAcc(this)" aria-label="Details anzeigen"><span>⌄</span></button>
+  </div>`;
+}
+function toggleAcc(btn) {
+  const acc = btn.closest('.acc');
+  if (acc) acc.classList.toggle('open');
+}
+
+// Final standings for a specific (past) round.
+function roundStandings(r) {
+  const cs = roundCourses(r);
+  return r.playerIds.map(pid => {
+    const p = state.players.find(x => x.id === pid);
+    if (!p) return null;
+    let total = 0, played = 0, par = 0;
+    cs.forEach(c => {
+      const s = (r.scores[c.id] && r.scores[c.id][pid]) || 0;
+      if (s > 0) { total += s; played++; par += Number(c.par) || 0; }
+    });
+    return { p, total, played, toPar: total - par };
+  }).filter(Boolean).sort((a, b) => {
+    if ((a.played === 0) !== (b.played === 0)) return a.played === 0 ? 1 : -1;
+    return a.total - b.total;
+  });
 }
 
 /* ---------- Leaderboard ---------- */
@@ -1080,7 +1130,7 @@ function renderLeaderboard() {
     if (past.length) {
       html += `<div class="section-label">Vergangene Runden</div>`;
       past.slice().reverse().forEach(r => {
-        html += `<div class="rank-row tap" onclick="resumeRound('${r.id}')">
+        const summary = `<div class="rank-row tap acc-row" onclick="resumeRound('${r.id}')">
           <div class="rank-badge">✓</div>
           <div class="grow">
             <div class="rank-name truncate">${esc(r.name)}</div>
@@ -1088,6 +1138,16 @@ function renderLeaderboard() {
           </div>
           <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteRound('${r.id}')">✕</button>
         </div>`;
+        const st = roundStandings(r);
+        const rows = st.length
+          ? st.map((s, idx) => `<div class="acc-stand-row">
+              <span class="acc-rank">${s.played ? idx + 1 : '—'}</span>
+              <span class="avatar sm" style="background:${s.p.color}">${esc(initials(s.p.name))}</span>
+              <span class="grow truncate">${esc(s.p.name)}</span>
+              <span class="mono small">${s.played ? `${s.total} · ${toParLabelText(s.toPar)}` : '—'}</span>
+            </div>`).join('')
+          : `<p class="mono small muted" style="padding:4px 2px">Keine Schläge erfasst</p>`;
+        html += accItem(summary, `<div class="acc-detail">${rows}</div>`, false);
       });
     }
     view.innerHTML = html; return;
@@ -1141,6 +1201,10 @@ function toParLabel(t) {
   if (t === 0) return `<div class="rank-topar topar-even">± Par</div>`;
   if (t < 0)   return `<div class="rank-topar topar-under">${t} unter</div>`;
   return `<div class="rank-topar topar-over">+${t} über</div>`;
+}
+function toParLabelText(t) {
+  if (t === 0) return '± Par';
+  return t < 0 ? `${t}` : `+${t}`;
 }
 
 /* ---------- Winner celebration: confetti + fireworks ----------
@@ -1725,7 +1789,7 @@ function renderMap() {
     placed.forEach(({ c, i }) => {
       const done = coursePlayed(c.id);
       const col = ROUTE_COLORS[i % ROUTE_COLORS.length];
-      html += `<div class="rank-row tap" onclick="playCourse('${c.id}')">
+      const summary = `<div class="rank-row tap acc-row" onclick="playCourse('${c.id}')">
         <div class="rank-badge" style="background:${col};color:#1a0e02;border-color:transparent">${String(i + 1).padStart(2, '0')}</div>
         <div class="grow">
           <div class="rank-name truncate">${esc(c.name)}</div>
@@ -1733,6 +1797,12 @@ function renderMap() {
         </div>
         <span class="mono small" style="color:var(--amber-300)">${done ? '✓' : '▸'}</span>
       </div>`;
+      const obs = c.obstacles || [];
+      const details = `<div class="acc-detail">
+        ${renderSequenceStrip(c)}
+        <div class="acc-meta">Par ${Number(c.par) || 0} · ${obs.length} Hindernis${obs.length === 1 ? '' : 'se'}${done ? ' · gespielt' : ''}</div>
+      </div>`;
+      html += accItem(summary, details, false);
     });
     const unplaced = state.courses.filter(c => !hasRoute(c));
     if (unplaced.length) {
@@ -2129,6 +2199,7 @@ Object.assign(window, {
   pickAllPlayers, pickAllCourses, endRound, resumeRound, deleteRound,
   finishRound, reopenRound, newRound,
   selectCourse, deselectCourse,
+  togglePanel, toggleAcc,
 });
 
 /* ============================================================

@@ -1157,3 +1157,64 @@ body.placing #vignette { opacity: 0.7; }
   background: rgba(100,194,148,0.14);
   border-color: rgba(100,194,148,0.4);
 }
+
+/* ---------- Collapsible panel + accordions ---------- */
+/* Whole HUD panel folds away via a chevron pinned at its bottom-centre,
+   revealing the 3D map underneath. */
+.panel-toggle {
+  position: sticky; bottom: -6px; z-index: 3;
+  display: flex; justify-content: center; align-items: center;
+  width: 100%; margin: 12px 0 -14px; padding: 0;
+  background: none; border: none; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.panel-toggle .chev {
+  display: grid; place-items: center;
+  width: 54px; height: 22px; border-radius: 999px;
+  background: var(--glass-bg-strong); border: 1px solid var(--line);
+  color: var(--amber-300); font-size: 15px; line-height: 1;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+}
+.panel-toggle:active .chev { transform: scale(0.9); }
+
+body.panel-collapsed .hud-panel {
+  max-height: none !important;
+  padding-top: 6px; padding-bottom: 6px;
+  overflow: hidden;
+}
+body.panel-collapsed .hud-panel > *:not(.panel-toggle) { display: none !important; }
+body.panel-collapsed .panel-toggle { margin: 0; bottom: 0; }
+body.panel-collapsed .panel-toggle .chev { transform: rotate(180deg); }
+body.panel-collapsed .panel-toggle:active .chev { transform: rotate(180deg) scale(0.9); }
+
+/* Per-item accordion: summary always visible, details fold open via a
+   chevron centred at the item's bottom edge. */
+.acc { position: relative; margin-bottom: 12px; padding-bottom: 13px; }
+.acc .rank-row { margin-bottom: 0 !important; }
+.acc-body { max-height: 0; overflow: hidden; transition: max-height .3s cubic-bezier(.4,0,.2,1); }
+.acc.open .acc-body { max-height: 520px; }
+.acc-body-inner { padding-top: 8px; }
+.acc-chev {
+  position: absolute; left: 50%; bottom: -1px; transform: translateX(-50%);
+  display: grid; place-items: center;
+  width: 46px; height: 18px; border-radius: 999px; padding: 0;
+  background: var(--glass-bg-strong); border: 1px solid var(--line);
+  color: var(--amber-300); cursor: pointer; z-index: 2;
+  -webkit-tap-highlight-color: transparent;
+}
+.acc-chev span { font-size: 13px; line-height: 1; transition: transform .28s cubic-bezier(.4,0,.2,1); }
+.acc.open .acc-chev span { transform: rotate(180deg); }
+.acc-chev:active { transform: translateX(-50%) scale(0.88); }
+
+.acc-detail { padding: 4px 6px 2px; }
+.acc-meta {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ink-mute); margin-top: 8px;
+}
+.acc-stand-row { display: flex; align-items: center; gap: 10px; padding: 5px 4px; }
+.acc-rank {
+  font-family: var(--font-mono); font-size: 12px; color: var(--ink-mute);
+  width: 18px; text-align: center; flex: none;
+}
+.avatar.sm { width: 24px; height: 24px; font-size: 10px; border-color: transparent; }
