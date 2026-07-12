@@ -34,7 +34,7 @@ const AVATAR_COLORS = [
 ];
 const ROUTE_COLORS = ['#ffb547','#64c294','#7ab8ff','#c896ff','#e07856','#ffd18a','#4fd1c5','#ff6b6b'];
 // Bonus beacon (orange tennis ball): hit it in real life → −1 stroke.
-const BEACON_COLOR = '#ff7a1a';
+const BEACON_COLOR = '#ff6a00'; // neon orange
 
 /* ============================================================
    State + persistence
@@ -606,6 +606,36 @@ function makeMarkerSprite(emoji, colorHex, badge) {
   return sp;
 }
 
+// Beacon = a simple glowing neon circle (no emoji, no inner cutout).
+function makeNeonCircleTexture(colorHex) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+  const ctx = c.getContext('2d');
+  const glow = ctx.createRadialGradient(128, 128, 8, 128, 128, 128);
+  glow.addColorStop(0, colorHex);
+  glow.addColorStop(0.42, colorHex);
+  glow.addColorStop(0.6, colorHex + '99');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(128, 128, 128, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = colorHex;
+  ctx.beginPath(); ctx.arc(128, 128, 66, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.arc(128, 128, 66, 0, Math.PI * 2); ctx.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  return tex;
+}
+function makeBeaconSprite(colorHex) {
+  const mat = new THREE.SpriteMaterial({
+    map: makeNeonCircleTexture(colorHex),
+    depthTest: true, depthWrite: false, transparent: true, blending: THREE.AdditiveBlending,
+  });
+  const sp = new THREE.Sprite(mat);
+  const scale = scene3.radius * 0.052;
+  sp.scale.set(scale, scale, scale);
+  return sp;
+}
+
 function makeBeacon(colorHex, height) {
   const geo = new THREE.CylinderGeometry(0.02, 0.02, height, 6, 1, false);
   const mat = new THREE.MeshBasicMaterial({
@@ -666,7 +696,7 @@ function buildMarkers(course, colorIdx) {
     beacon.userData.courseId = course.id;
     scene3.markerGroup.add(beacon);
 
-    const sprite = makeMarkerSprite(emoji, c, badge);
+    const sprite = kind === 'beacon' ? makeBeaconSprite(c) : makeMarkerSprite(emoji, c, badge);
     sprite.position.set(anchor.x, anchor.y + scene3.radius * 0.05, anchor.z);
     sprite.userData.courseId = course.id;
     sprite.userData.kind = kind;
@@ -745,7 +775,7 @@ function drawDraft(course, colorIdx) {
     const beacon = makeBeacon(c, 4);
     beacon.position.set(pos.x, pos.y + 2, pos.z);
     draftGroup.add(beacon);
-    const sprite = makeMarkerSprite(emoji, c, badge);
+    const sprite = (wp && wp.kind === 'beacon') ? makeBeaconSprite(c) : makeMarkerSprite(emoji, c, badge);
     sprite.position.set(pos.x, pos.y + scene3.radius * 0.05, pos.z);
     sprite.userData.baseY = sprite.position.y;
     sprite.userData.phase = Math.random() * Math.PI * 2;
@@ -865,7 +895,7 @@ function enterPlacement(course, editorApi) {
     <button class="place-mode-btn" data-mode="start">🚩 Start</button>
     <button class="place-mode-btn" data-mode="end">🏁 Ziel</button>
     <button class="place-mode-btn" data-mode="obs">＋ Hindernis</button>
-    <button class="place-mode-btn beacon" data-mode="beacon">🎾 Beacon</button>
+    <button class="place-mode-btn beacon" data-mode="beacon">🟠 Beacon</button>
   </div>`);
   const cancel = el(`<button class="place-cancel" id="placeCancel">← Zurück</button>`);
   const done = el(`<button class="place-done" id="placeDone">✓ Fertig</button>`);
@@ -912,7 +942,7 @@ function enterPlacement(course, editorApi) {
     list.appendChild(endRow);
 
     const beaconRow = el(`<div class="wp-item anchor beacon ${course.beaconPos ? 'has' : 'no'}">
-      <div class="wp-badge">🎾</div>
+      <div class="wp-badge">🟠</div>
       <div class="wp-label">Beacon <span class="wp-bonus">−1</span></div>
       <div class="wp-status">${course.beaconPos ? 'gesetzt' : 'optional'}</div>
       ${course.beaconPos ? `<button class="wp-btn wp-del" data-act="clear-beacon" title="Beacon löschen">✕</button>` : ''}
@@ -963,7 +993,7 @@ function enterPlacement(course, editorApi) {
     } else if (mode === 'beacon') {
       course.beaconPos = p;
       refreshSide(); editorApi.redraw(); editorApi.notifyChange && editorApi.notifyChange();
-      toast('🎾 Beacon gesetzt');
+      toast('🟠 Beacon gesetzt');
     } else {
       openTypePicker((typeKey, text) => {
         if (!typeKey) return;
@@ -2123,7 +2153,7 @@ function renderSequenceStrip(course) {
   });
   parts.push(`<span class="seq-arrow">›</span>`);
   parts.push(`<span class="seq-node end"${endTitle}>🏁 ${esc(course.end || 'Ziel')}</span>`);
-  if (course.beaconPos) parts.push(`<span class="seq-node beacon">🎾 Beacon −1</span>`);
+  if (course.beaconPos) parts.push(`<span class="seq-node beacon">🟠 Beacon −1</span>`);
   let html = `<div class="seq-strip">${parts.join('')}</div>`;
   if (course.startNote || course.endNote) {
     const notes = [];
